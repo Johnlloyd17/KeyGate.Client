@@ -658,16 +658,80 @@ local SQLite is just a cache/fallback for display, never for key validation.
   `DeviceStatusListener` and updates the Dashboard/Devices grids in real time)
 
 ### Phase 5 — Hardening & Deployment (Week 7–8)
-- Rate limiting, device auth, key hashing review, optional self-signed HTTPS
-- Windows kiosk-mode packaging for the MAUI client (auto-start, prevent
-  alt-tab/close if desired)
-- Set up the local host machine: fixed local IP via DHCP reservation, install
-  PostgreSQL + `KeyGate.Api`, configure firewall for LAN-only access (see
-  section 6.6)
-- Move the dev database over to the host machine using pgAdmin4's
-  Backup/Restore, or recreate the schema fresh via EF Core Migrations (see
-  section 6.7)
-- Pilot on a couple of real machines on the WiFi before full rollout
+- ✅ Rate limiting on the unlock endpoint
+  (`AddRateLimiter` "unlock" policy in `KeyGate.Api/Program.cs` +
+  `[EnableRateLimiting("unlock")]` on `POST /api/sessions/unlock`; fixed window,
+  5 attempts per minute per device/IP, rejects with HTTP 429 —
+  verified: 5 requests pass, the 6th is rejected)
+- ✅ Device auth review
+  (each `KeyGate.Client.exe` authenticates with its own device credential —
+  64-char API key from a CSPRNG, BCrypt-hashed at rest, verified via
+  `DeviceAuthService.ValidateAsync` against `X-Device-Id`/`X-Device-Api-Key`;
+  anonymous first-run `POST /api/devices/register` stays as the plan requires —
+  tradeoff noted in the runbook)
+- ✅ Key hashing review
+  (access keys + device API keys are BCrypt-hashed via `KeyHashingService`,
+  never plain text; the 6-digit access keys rely on the unlock rate limit to
+  blunt brute-forcing)
+- ✅ Optional HTTPS enabled in dev
+  (`UseHttpsRedirection()` + existing `https` launch profile
+  `https://localhost:7000`, dev cert trusted via `dotnet dev-certs https
+  --trust`; launching with the `https` profile makes HTTP on :5000 redirect to
+  HTTPS — verified: `/api/devices` responds over TLS, HTTP returns 307)
+- ✅ Windows kiosk-mode packaging: auto-start
+  (`Platforms/Windows/StartupRegistration.cs` writes/refreshes
+  `HKCU\Software\Microsoft\Windows\CurrentVersion\Run` →
+  `KeyGate.Client.exe` on every launch, hooked from `App.xaml.cs`
+  `OnWindowCreated`; combined with the existing `AppWindowPresenterKind.FullScreen` flag)
+- ⬜ Prevent alt-tab/close (if desired) — manual Windows kiosk / Assigned
+  Access setting, see runbook
+- ⬜ Set up the local host machine — manual ops, see runbook
+- ⬜ Move the dev database to the host machine — manual ops, see runbook
+- ⬜ Pilot on a couple of real machines on the WiFi — manual, see runbook
+
+#### Phase 5 runbook (manual ops — do these on/around the host machine)
+
+1. **Pick the host machine** — any always-on PC (spare desktop, low-power mini
+   PC, or an existing office PC). **Wired Ethernet strongly preferred** for it;
+   the kiosk desktops can stay on WiFi (section 6.6).
+2. **Install PostgreSQL + `KeyGate.Api` on the host** (section 6.5). In
+   `postgresql.conf` keep `listen_addresses = 'localhost'` — Postgres never
+   needs to accept remote connections because only the API runs on that machine.
+3. **Create the DB + app user on the host** (section 6.5, step A), then set the
+   real connection string in the host's `KeyGate.Api/appsettings.json` (or an
+   environment variable — never commit the real password to source control).
+4. **Get the schema (and data) onto the host** — either:
+   - pgAdmin4 **Backup** of `keygate_db` on the dev machine, copy the `.backup`
+     file over, then **Restore** on the host (section 6.7), or
+   - a fresh empty database on the host + `dotnet ef database update --project
+     KeyGate.Api` to recreate the schema via EF Core Migrations (section 6.5).
+5. **Configure the host firewall** — allow inbound TCP on the API port (e.g.
+   `5000`) from the **local subnet only**, nothing public (section 6.6).
+6. **Set a DHCP reservation** on the router so the host's local IP never
+   changes (e.g. always `192.168.1.50`). Then point every `KeyGate.Client.exe`
+   (`ApiBaseUrl`) and the Admin Portal (`KeyGateApi:BaseUrl`) at
+   `http://192.168.1.50:5000`. QR codes will encode that same local URL, so
+   phones must be on the same WiFi to self-register — expected behavior
+   (section 6.6).
+7. **HTTPS (optional)** — generate a self-signed certificate on the host, bind
+   it to the API, and trust it on each kiosk + admin PC, or keep plain HTTP on
+   the closed LAN (section 6.6 + section 11). Dev machines already have the
+   trusted dev certificate.
+8. **Add a UPS** (battery backup) to the host — every kiosk depends on it being
+   reachable (section 6.6).
+9. **Kiosk hardening (optional)** — if you want to prevent Alt-Tab / closing the
+   app, enable Windows kiosk mode (Assigned Access) for the `KeyGate.Client.exe`
+   user on each desktop. The client already runs fullscreen and auto-starts.
+10. **Pilot** — deploy `KeyGate.Client.exe` to 1–2 real machines, then verify:
+    device self-registration on first run, unlock via a registered key, manual
+    lock + idle re-lock, lock screen branding refresh, and the Admin live
+    dashboard updating in real time over WiFi.
+
+**Known tradeoff (device auth):** `POST /api/devices/register` is anonymous by
+design so a fresh kiosk can self-register on first run. On an *untrusted* LAN an
+attacker could re-register a machine and rotate its device key. Acceptable for
+the plan's trust model; if the network is ever hostile, gate registration to
+admin-approved devices only.
 
 ---
 
@@ -677,6 +741,8 @@ local SQLite is just a cache/fallback for display, never for key validation.
 - Facial recognition or NFC card as an alternative to typing the key
 - Per-department lock screen branding
 - Analytics dashboard (usage per individual, per device, peak hours)
+
+
 
 
 You must follow ONLY the instructions and structure written in the attached

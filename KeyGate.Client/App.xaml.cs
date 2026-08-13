@@ -29,6 +29,8 @@ namespace KeyGate.Client
 #if WINDOWS
         private static void OnWindowCreated(object? sender, EventArgs e)
         {
+            KeyGate.Client.WinUI.StartupRegistration.EnsureEnabled();
+
             if (sender is not Window window || window.Handler?.PlatformView is not Microsoft.UI.Xaml.Window nativeWindow)
             {
                 return;

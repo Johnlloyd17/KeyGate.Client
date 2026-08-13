@@ -3,6 +3,7 @@ using KeyGate.Api.Entities;
 using KeyGate.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 
 namespace KeyGate.Api.Controllers;
@@ -39,6 +40,7 @@ public class SessionsController : ControllerBase
 
     [HttpPost("unlock")]
     [AllowAnonymous]
+    [EnableRateLimiting("unlock")]
     public async Task<IActionResult> Unlock([FromBody] UnlockRequest request)
     {
         var device = await GetAuthenticatedDeviceAsync();

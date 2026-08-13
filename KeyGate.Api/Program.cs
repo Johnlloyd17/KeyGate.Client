@@ -1,9 +1,11 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using KeyGate.Api.Data;
 using KeyGate.Api.Entities;
 using KeyGate.Api.Hubs;
 using KeyGate.Api.Services;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 
@@ -22,6 +24,28 @@ builder.Services.AddScoped<QrCodeService>();
 builder.Services.AddScoped<DeviceAuthService>();
 builder.Services.AddScoped<SessionService>();
 builder.Services.AddSignalR();
+
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("unlock", context =>
+    {
+        var partitionKey = context.Request.Headers["X-Device-Id"].ToString();
+        if (string.IsNullOrWhiteSpace(partitionKey))
+        {
+            partitionKey = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        }
+
+        return RateLimitPartition.GetFixedWindowLimiter(partitionKey, _ => new FixedWindowRateLimiterOptions
+        {
+            PermitLimit = 5,
+            Window = TimeSpan.FromMinutes(1),
+            QueueLimit = 0,
+            AutoReplenishment = true
+        });
+    });
+});
 
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var signingKey = new SymmetricSecurityKey(
@@ -85,6 +109,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseStaticFiles();
+app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseAuthentication();
 app.UseAuthorization();
 

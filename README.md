@@ -130,6 +130,10 @@ Run the API:
 ```bash
 dotnet run --project KeyGate.Api
 # http://localhost:5000
+
+# HTTPS in dev (HTTP on :5000 will redirect to HTTPS):
+dotnet run --project KeyGate.Api --launch-profile https
+# https://localhost:7000  (dev cert already trusted via `dotnet dev-certs https --trust`)
 ```
 
 ### 3. Admin Portal (`KeyGate.Admin`)
@@ -245,7 +249,7 @@ Real-time (SignalR hub)
 - Registration tokens expire (default 48h) and are single-use.
 - Unlock + session-start happen as **one atomic database transaction**, so the
   same key can't unlock two computers at the same instant.
-- The unlock endpoint is meant to be rate-limited before production rollout.
+- The unlock endpoint is rate-limited (5 attempts/min/device, HTTP 429) to blunt key brute-forcing.
 - Each MAUI client authenticates with a device credential issued at first-run registration.
 - One active session per key (a key already active on another device is rejected).
 - Session logs are immutable (no hard deletes, only status flags).
@@ -261,6 +265,6 @@ Real-time (SignalR hub)
 | 2 | Registration flow (Razor page, key generation + one-time reveal) | ✅ Done |
 | 3 | MAUI lock screen client (fullscreen UI, device self-registration, unlock, idle timeout, SQLite cache) | ✅ Done |
 | 4 | Admin Portal (login, individuals, devices, lock screen customization, session logs + CSV, SignalR live dashboard) | ✅ Done |
-| 5 | Hardening & deployment (rate limiting, kiosk packaging, LAN host setup, pilot) | ⬜ Pending |
+| 5 | Hardening & deployment (rate limiting, HTTPS in dev, Windows auto-start; LAN host setup + pilot documented as a manual runbook) | ✅ Code done (ops runbook in plan) |
 
 See the development plan for the full roadmap and future enhancements.

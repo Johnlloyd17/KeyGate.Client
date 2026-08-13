@@ -1,0 +1,173 @@
+@page "/sessions"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+<PageTitle>Sessions — KeyGate Admin</PageTitle>
+
+<h1>Sessions</h1>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label">Individual</label>
+                <select class="form-select" @bind="_selectedIndividualId">
+                    <option value="">All</option>
+                    @foreach (var individual in _individuals)
+                    {
+                        <option value="@individual.Id">@individual.FullName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Device</label>
+                <select class="form-select" @bind="_selectedDeviceId">
+                    <option value="">All</option>
+                    @foreach (var device in _devices)
+                    {
+                        <option value="@device.Id">@device.DeviceName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">From</label>
+                <input type="date" class="form-control" @bind="_fromDate" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">To</label>
+                <input type="date" class="form-control" @bind="_toDate" />
+            </div>
+            <div class="col-md-2">
+                <button class="btn btn-primary w-100" @onclick="ApplyFiltersAsync" disabled="@_busy">Apply</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="mb-2 d-flex justify-content-between align-items-center">
+    <span class="text-muted">@_sessions.Count session(s) shown</span>
+    <button class="btn btn-outline-success btn-sm" @onclick="ExportCsvAsync" disabled="@(_sessions.Count == 0)">Export CSV</button>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Individual</th>
+                <th>Device</th>
+                <th>Started</th>
+                <th>Ended</th>
+                <th>Duration</th>
+                <th>End reason</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (_sessions.Count == 0)
+            {
+                <tr><td colspan="6" class="text-muted">No sessions found.</td></tr>
+            }
+            @foreach (var session in _sessions)
+            {
+                <tr>
+                    <td>@session.IndividualName</td>
+                    <td>@session.DeviceName</td>
+                    <td>@session.StartedAt.ToLocalTime().ToString("g")</td>
+                    <td>@(session.EndedAt?.ToLocalTime().ToString("g") ?? "Active")</td>
+                    <td>@FormatDuration(session.DurationSeconds)</td>
+                    <td>@(session.EndReason ?? "—")</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Inject] private AdminApiClient Api { get; set; } = default!;
+    [Inject] private IJSRuntime Js { get; set; } = default!;
+
+    private List<IndividualDto> _individuals = new();
+    private List<DeviceDto> _devices = new();
+    private List<SessionDto> _sessions = new();
+    private string? _error;
+    private bool _busy;
+
+    private string _selectedIndividualId = string.Empty;
+    private string _selectedDeviceId = string.Empty;
+    private DateTime? _fromDate;
+    private DateTime? _toDate;
+
+    private int? SelectedIndividualId =>
+        int.TryParse(_selectedIndividualId, out var id) ? id : null;
+
+    private int? SelectedDeviceId =>
+        int.TryParse(_selectedDeviceId, out var id) ? id : null;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _individuals = await Api.GetIndividualsAsync();
+            _devices = await Api.GetDevicesAsync();
+            await ApplyFiltersAsync();
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _busy = true;
+        _error = null;
+        try
+        {
+            var from = _fromDate.HasValue ? _fromDate.Value.ToUniversalTime() : (DateTime?)null;
+            var to = _toDate.HasValue ? _toDate.Value.Date.AddDays(1).ToUniversalTime() : (DateTime?)null;
+
+            _sessions = await Api.GetSessionsAsync(SelectedIndividualId, SelectedDeviceId, from, to);
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private static string FormatDuration(int? seconds)
+    {
+        if (seconds is null)
+        {
+            return "—";
+        }
+        return TimeSpan.FromSeconds(seconds.Value).ToString(@"h\:mm\:ss");
+    }
+
+    private async Task ExportCsvAsync()
+    {
+        var csv = new System.Text.StringBuilder();
+        csv.AppendLine("Individual,Device,Started,Ended,DurationSeconds,EndReason");
+        foreach (var s in _sessions)
+        {
+            var started = s.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
+            var ended = s.EndedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "Active";
+            csv.AppendLine($"{CsvEscape(s.IndividualName)},{CsvEscape(s.DeviceName)},{started},{ended},{s.DurationSeconds?.ToString() ?? ""},{CsvEscape(s.EndReason ?? string.Empty)}");
+        }
+
+        await Js.InvokeVoidAsync("downloadCsv", $"keygate-sessions-{DateTime.Now:yyyyMMdd-HHmmss}.csv", csv.ToString());
+    }
+
+    private static string CsvEscape(string value)
+    {
+        const char quote = '"';
+        return $"{quote}{value.Replace(quote.ToString(), quote.ToString() + quote)}{quote}";
+    }
+}

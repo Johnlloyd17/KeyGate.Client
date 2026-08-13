@@ -1,0 +1,65 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.14.37531.7
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeyGate.Client", "KeyGate.Client\KeyGate.Client.csproj", "{4F248639-B5B2-4ADC-A735-942F93683622}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeyGate.Api", "KeyGate.Api\KeyGate.Api.csproj", "{37AE571F-5954-4AAC-85E9-47C9AE3A0314}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "KeyGate.Admin", "KeyGate.Admin\KeyGate.Admin.csproj", "{C3393A29-D9FD-4072-8746-E077485AFB23}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Debug|x64.Build.0 = Debug|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Debug|x86.Build.0 = Debug|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Release|x64.ActiveCfg = Release|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Release|x64.Build.0 = Release|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Release|x86.ActiveCfg = Release|Any CPU
+		{4F248639-B5B2-4ADC-A735-942F93683622}.Release|x86.Build.0 = Release|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Debug|x64.Build.0 = Debug|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Debug|x86.Build.0 = Debug|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Release|Any CPU.Build.0 = Release|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Release|x64.ActiveCfg = Release|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Release|x64.Build.0 = Release|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Release|x86.ActiveCfg = Release|Any CPU
+		{37AE571F-5954-4AAC-85E9-47C9AE3A0314}.Release|x86.Build.0 = Release|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Debug|x64.Build.0 = Debug|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Debug|x86.Build.0 = Debug|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Release|x64.ActiveCfg = Release|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Release|x64.Build.0 = Release|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Release|x86.ActiveCfg = Release|Any CPU
+		{C3393A29-D9FD-4072-8746-E077485AFB23}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {435F9166-403B-48A3-BA71-946050EE6FB0}
+	EndGlobalSection
+EndGlobal

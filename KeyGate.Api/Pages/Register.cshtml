@@ -1,0 +1,120 @@
+@page "~/register/{token}"
+@model KeyGate.Api.Pages.RegisterModel
+@{
+    Layout = null;
+    var token = RouteData.Values["token"]?.ToString();
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>KeyGate Registration</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: "Segoe UI", Roboto, Arial, sans-serif;
+            background: #1e2430;
+            color: #e8eaed;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+            padding: 16px;
+        }
+        .card {
+            background: #2a3242;
+            border-radius: 12px;
+            padding: 28px;
+            width: 100%;
+            max-width: 380px;
+            box-shadow: 0 8px 24px rgba(0,0,0,.35);
+            text-align: center;
+        }
+        h1 { font-size: 22px; margin-bottom: 4px; color: #fff; }
+        .subtitle { color: #9aa4b8; font-size: 13px; margin-bottom: 20px; }
+        .detail {
+            background: #1e2430;
+            border-radius: 8px;
+            padding: 12px 14px;
+            margin-bottom: 10px;
+            text-align: left;
+        }
+        .detail .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #9aa4b8; }
+        .detail .value { font-size: 15px; margin-top: 2px; word-break: break-word; }
+        button {
+            width: 100%;
+            padding: 14px;
+            margin-top: 14px;
+            border: 0;
+            border-radius: 8px;
+            background: #3b82f6;
+            color: #fff;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+        }
+        button:hover { background: #2f6fe0; }
+        .key {
+            font-size: 40px;
+            font-weight: 700;
+            letter-spacing: 8px;
+            color: #4ade80;
+            margin: 8px 0 16px;
+        }
+        .note { font-size: 13px; color: #9aa4b8; line-height: 1.5; }
+        .error {
+            color: #f87171;
+            background: #3a2b2b;
+            border-radius: 8px;
+            padding: 14px;
+            font-size: 14px;
+        }
+        .expires { font-size: 12px; color: #9aa4b8; margin-top: 12px; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <h1>KeyGate</h1>
+        <p class="subtitle">Complete your account registration</p>
+
+        @if (!string.IsNullOrEmpty(Model.ErrorMessage))
+        {
+            <div class="error">@Model.ErrorMessage</div>
+        }
+        else if (!string.IsNullOrEmpty(Model.AccessKey))
+        {
+            <p class="note">Registration complete, @Model.FullName. Your personal access key is:</p>
+            <div class="key">@Model.AccessKey</div>
+            <p class="note">Save it now — it is shown only once and unlocks any KeyGate computer.</p>
+        }
+        else if (!string.IsNullOrEmpty(Model.FullName))
+        {
+            <form method="post">
+                @Html.AntiForgeryToken()
+                <div class="detail">
+                    <div class="label">Name</div>
+                    <div class="value">@Model.FullName</div>
+                </div>
+                <div class="detail">
+                    <div class="label">Email / ID</div>
+                    <div class="value">@Model.EmailOrEmployeeId</div>
+                </div>
+                @if (!string.IsNullOrEmpty(Model.Department))
+                {
+                    <div class="detail">
+                        <div class="label">Department</div>
+                        <div class="value">@Model.Department</div>
+                    </div>
+                }
+                <p class="note">Confirm that these details are correct. Your access key will be generated and shown to you once.</p>
+                <button type="submit">Complete Registration</button>
+                @if (Model.ExpiresAt.HasValue)
+                {
+                    <p class="expires">Link expires: @Model.ExpiresAt.Value.ToLocalTime().ToString("g")</p>
+                }
+            </form>
+        }
+    </div>
+</body>
+</html>

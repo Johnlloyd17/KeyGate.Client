@@ -1,0 +1,49 @@
+## .NET / .NET Core
+bin/
+obj/
+out/
+publish/
+*.user
+*.suo
+*.userprefs
+*.publishproj
+
+## Visual Studio
+.vs/
+.vscode/
+.idea/
+*.vscode
+
+## Rider / JetBrains
+.idea/
+
+## MAUI / Xamarin
+*.ipa
+*.apk
+*.aab
+*.app
+*.dSYM
+bundle_output/
+*.cer
+*.p12
+*.pfx
+
+## SQLite / local DB
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+## OS files
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+## Logs
+*.log
+logs/
+
+## Keys / secrets (keep appsettings committed only with dev placeholders)
+secrets.json
+.env
+*.env

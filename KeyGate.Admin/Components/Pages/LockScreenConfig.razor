@@ -1,0 +1,224 @@
+@page "/lockscreen"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+<PageTitle>Lock Screen — KeyGate Admin</PageTitle>
+
+<h1>Lock Screen</h1>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="card mb-3">
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Apply to</label>
+                <select class="form-select" @bind="_selectedDeviceId" @bind:after="OnDeviceChanged">
+                    <option value="">Global (all devices)</option>
+                    @foreach (var device in _devices)
+                    {
+                        <option value="@device.Id">@device.DeviceName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-8">
+                <label class="form-label">Title</label>
+                <input class="form-control" @bind="_title" />
+            </div>
+        </div>
+
+        <div class="row g-3 mt-1">
+            <div class="col-md-6">
+                <label class="form-label">Background image</label>
+                <InputFile OnChange="OnBackgroundUploadAsync" accept="image/*" />
+                @if (_uploadingBackground)
+                {
+                    <div class="text-muted small mt-1">Uploading…</div>
+                }
+                @if (!string.IsNullOrEmpty(_backgroundImageUrl))
+                {
+                    <img src="@_backgroundImageUrl" alt="Background preview" class="mt-2 img-fluid border rounded" style="max-height:160px;" />
+                    <button class="btn btn-sm btn-outline-danger d-block mt-2" @onclick="RemoveBackground">Remove</button>
+                }
+                else
+                {
+                    <div class="text-muted small mt-1">No background set.</div>
+                }
+            </div>
+            <div class="col-md-6">
+                <label class="form-label">Logo</label>
+                <InputFile OnChange="OnLogoUploadAsync" accept="image/*" />
+                @if (_uploadingLogo)
+                {
+                    <div class="text-muted small mt-1">Uploading…</div>
+                }
+                @if (!string.IsNullOrEmpty(_logoUrl))
+                {
+                    <img src="@_logoUrl" alt="Logo preview" class="mt-2 border rounded" style="max-height:120px;max-width:180px;" />
+                    <button class="btn btn-sm btn-outline-danger d-block mt-2" @onclick="RemoveLogo">Remove</button>
+                }
+                else
+                {
+                    <div class="text-muted small mt-1">No logo set.</div>
+                }
+            </div>
+        </div>
+
+        <div class="mt-3">
+            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
+            <span class="text-muted small ms-2">
+                @if (_config is not null)
+                {
+                    <span>Last updated: @_config.UpdatedAt.ToLocalTime().ToString("g") (@_config.Source)</span>
+                }
+            </span>
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header">Preview</div>
+    <div class="card-body p-0">
+        <div class="lock-screen-preview d-flex align-items-center justify-content-center flex-column">
+            @if (!string.IsNullOrEmpty(_backgroundImageUrl))
+            {
+                <div class="preview-bg" style="background-image:url('@_backgroundImageUrl');"></div>
+            }
+            @if (!string.IsNullOrEmpty(_logoUrl))
+            {
+                <img src="@_logoUrl" alt="Logo" style="max-height:90px;max-width:200px;margin-bottom:12px;" />
+            }
+            <h2 class="preview-title">@(string.IsNullOrWhiteSpace(_title) ? "KeyGate" : _title)</h2>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private AdminApiClient Api { get; set; } = default!;
+
+    private List<DeviceDto> _devices = new();
+    private string _selectedDeviceId = string.Empty;
+    private string _title = string.Empty;
+    private string? _backgroundImageUrl;
+    private string? _logoUrl;
+    private string? _error;
+    private bool _saving;
+    private bool _uploadingBackground;
+    private bool _uploadingLogo;
+    private LockScreenConfigDto? _config;
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _devices = await Api.GetDevicesAsync();
+            await LoadConfigAsync();
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private int? SelectedDeviceId =>
+        int.TryParse(_selectedDeviceId, out var id) ? id : null;
+
+    private async Task OnDeviceChanged()
+    {
+        _error = null;
+        await LoadConfigAsync();
+    }
+
+    private async Task LoadConfigAsync()
+    {
+        try
+        {
+            _config = await Api.GetLockScreenConfigAsync(SelectedDeviceId);
+            _title = _config.Title ?? string.Empty;
+            _backgroundImageUrl = _config.BackgroundImageUrl;
+            _logoUrl = _config.LogoUrl;
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task OnBackgroundUploadAsync(InputFileChangeEventArgs e)
+    {
+        await UploadAsync(e, isBackground: true);
+    }
+
+    private async Task OnLogoUploadAsync(InputFileChangeEventArgs e)
+    {
+        await UploadAsync(e, isBackground: false);
+    }
+
+    private async Task UploadAsync(InputFileChangeEventArgs e, bool isBackground)
+    {
+        var file = e.File;
+        if (file is null || file.Size == 0)
+        {
+            return;
+        }
+
+        try
+        {
+            if (isBackground)
+            {
+                _uploadingBackground = true;
+            }
+            else
+            {
+                _uploadingLogo = true;
+            }
+
+            await using var stream = file.OpenReadStream(10 * 1024 * 1024);
+            var url = await Api.UploadImageAsync(stream, file.Name);
+
+            if (isBackground)
+            {
+                _backgroundImageUrl = url;
+            }
+            else
+            {
+                _logoUrl = url;
+            }
+            _error = null;
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _uploadingBackground = false;
+            _uploadingLogo = false;
+        }
+    }
+
+    private void RemoveBackground() => _backgroundImageUrl = null;
+
+    private void RemoveLogo() => _logoUrl = null;
+
+    private async Task SaveAsync()
+    {
+        _saving = true;
+        _error = null;
+        try
+        {
+            _config = await Api.SaveLockScreenConfigAsync(SelectedDeviceId, _backgroundImageUrl, _logoUrl, _title);
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+}

@@ -1,0 +1,188 @@
+@page "/devices"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+@implements IAsyncDisposable
+
+<PageTitle>Devices — KeyGate Admin</PageTitle>
+
+<h1>Devices</h1>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="mb-3">
+    <button class="btn btn-outline-primary btn-sm" @onclick="LoadAsync">Refresh</button>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Device</th>
+                <th>Location</th>
+                <th>Status</th>
+                <th>Currently signed in</th>
+                <th>Last seen</th>
+                <th class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (_devices.Count == 0)
+            {
+                <tr><td colspan="6" class="text-muted">No devices have connected yet.</td></tr>
+            }
+            @foreach (var device in _devices)
+            {
+                <tr>
+                    <td>
+                        @if (_editingId == device.Id)
+                        {
+                            <input class="form-control form-control-sm" @bind="_editName" />
+                        }
+                        else
+                        {
+                            @device.DeviceName
+                        }
+                    </td>
+                    <td>
+                        @if (_editingId == device.Id)
+                        {
+                            <input class="form-control form-control-sm" @bind="_editLocation" />
+                        }
+                        else
+                        {
+                            @(device.Location ?? "—")
+                        }
+                    </td>
+                    <td>
+                        @if (device.Status == "Unlocked")
+                        {
+                            <span class="badge text-bg-success status-badge">Unlocked</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary status-badge">Locked</span>
+                        }
+                    </td>
+                    <td>@(device.CurrentIndividualName ?? "—")</td>
+                    <td>@device.LastSeenAt.ToLocalTime().ToString("g")</td>
+                    <td class="text-end text-nowrap">
+                        @if (_editingId == device.Id)
+                        {
+                            <button class="btn btn-sm btn-primary" @onclick="() => SaveEditAsync(device.Id)">Save</button>
+                            <button class="btn btn-sm btn-secondary ms-1" @onclick="CancelEdit">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline-secondary" @onclick="() => StartEdit(device)">Rename</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@code {
+    [Inject] private AdminApiClient Api { get; set; } = default!;
+    [Inject] private DeviceStatusListener Listener { get; set; } = default!;
+
+    private List<DeviceDto> _devices = new();
+    private string? _error;
+    private int? _editingId;
+    private string _editName = string.Empty;
+    private string? _editLocation;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+        try
+        {
+            await Listener.EnsureStartedAsync();
+            Listener.DeviceStatusChanged += HandleDeviceStatusChanged;
+        }
+        catch
+        {
+            // SignalR is optional — the grid still works from the initial load + manual refresh.
+        }
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _devices = await Api.GetDevicesAsync();
+            _error = null;
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void StartEdit(DeviceDto device)
+    {
+        _editingId = device.Id;
+        _editName = device.DeviceName;
+        _editLocation = device.Location;
+    }
+
+    private void CancelEdit() => _editingId = null;
+
+    private async Task SaveEditAsync(int id)
+    {
+        try
+        {
+            var updated = await Api.UpdateDeviceAsync(id, _editName.Trim(), _editLocation);
+            var index = _devices.FindIndex(d => d.Id == id);
+            if (index >= 0)
+            {
+                _devices[index] = updated;
+            }
+            _editingId = null;
+            _error = null;
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private void HandleDeviceStatusChanged(DeviceStatusChangedEvent @event)
+    {
+        InvokeAsync(() =>
+        {
+            var index = _devices.FindIndex(d => d.Id == @event.DeviceId);
+            if (index >= 0)
+            {
+                _devices[index] = _devices[index] with
+                {
+                    DeviceName = @event.DeviceName,
+                    Status = @event.Status,
+                    CurrentIndividualName = @event.CurrentIndividualName
+                };
+            }
+            else
+            {
+                _devices.Add(new DeviceDto(
+                    @event.DeviceId,
+                    @event.DeviceName,
+                    string.Empty,
+                    null,
+                    @event.Status,
+                    @event.ChangedAt,
+                    null,
+                    @event.CurrentIndividualName));
+            }
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Listener.DeviceStatusChanged -= HandleDeviceStatusChanged;
+        await Listener.DisposeAsync();
+    }
+}

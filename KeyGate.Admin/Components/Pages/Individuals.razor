@@ -1,0 +1,358 @@
+@page "/individuals"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+<PageTitle>Individuals — KeyGate Admin</PageTitle>
+
+<h1>Individuals</h1>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+
+<div class="row mb-3 g-2 align-items-center">
+    <div class="col-md-6">
+        <input class="form-control" type="search" placeholder="Search by name or email/ID…" @bind="_search" @bind:event="oninput" />
+    </div>
+    <div class="col-md-6 text-md-end">
+        <button class="btn btn-primary" @onclick="() => _showAdd = true" disabled="@(_showAdd)">Add individual</button>
+    </div>
+</div>
+
+@if (_showAdd)
+{
+    <div class="card mb-3">
+        <div class="card-header">Add individual</div>
+        <div class="card-body">
+            <EditForm Model="@_newIndividual" OnValidSubmit="AddIndividualAsync">
+                <DataAnnotationsValidator />
+                <div class="row g-3">
+                    <div class="col-md-4">
+                        <label class="form-label">Full name</label>
+                        <InputText class="form-control" @bind-Value="_newIndividual.FullName" />
+                        <ValidationMessage For="@(() => _newIndividual.FullName)" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Email / Employee ID</label>
+                        <InputText class="form-control" @bind-Value="_newIndividual.EmailOrEmployeeId" />
+                        <ValidationMessage For="@(() => _newIndividual.EmailOrEmployeeId)" />
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Department</label>
+                        <InputText class="form-control" @bind-Value="_newIndividual.Department" />
+                    </div>
+                </div>
+                @if (_formError is not null)
+                {
+                    <div class="alert alert-danger mt-3 mb-0">@_formError</div>
+                }
+                <div class="mt-3">
+                    <button type="submit" class="btn btn-primary" disabled="@_busy">Save</button>
+                    <button type="button" class="btn btn-secondary ms-2" @onclick="CancelAdd">Cancel</button>
+                </div>
+            </EditForm>
+        </div>
+    </div>
+}
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead>
+            <tr>
+                <th>Name</th>
+                <th>Email / ID</th>
+                <th>Department</th>
+                <th>Status</th>
+                <th>Created</th>
+                <th class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody>
+            @if (_filtered.Count == 0)
+            {
+                <tr><td colspan="6" class="text-muted">No individuals found.</td></tr>
+            }
+            @foreach (var individual in _filtered)
+            {
+                <tr>
+                    <td>
+                        @if (_editingId == individual.Id)
+                        {
+                            <input class="form-control form-control-sm" @bind="_editName" />
+                        }
+                        else
+                        {
+                            @individual.FullName
+                        }
+                    </td>
+                    <td>
+                        @if (_editingId == individual.Id)
+                        {
+                            <input class="form-control form-control-sm" @bind="_editEmail" />
+                        }
+                        else
+                        {
+                            @individual.EmailOrEmployeeId
+                        }
+                    </td>
+                    <td>
+                        @if (_editingId == individual.Id)
+                        {
+                            <input class="form-control form-control-sm" @bind="_editDepartment" />
+                        }
+                        else
+                        {
+                            @(individual.Department ?? "—")
+                        }
+                    </td>
+                    <td>
+                        @if (individual.Status == "Registered")
+                        {
+                            <span class="badge text-bg-success status-badge">Registered</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-warning status-badge">Pending</span>
+                        }
+                    </td>
+                    <td>@individual.CreatedAt.ToLocalTime().ToString("g")</td>
+                    <td class="text-end text-nowrap">
+                        @if (_editingId == individual.Id)
+                        {
+                            <button class="btn btn-sm btn-primary" @onclick="() => SaveEditAsync(individual.Id)">Save</button>
+                            <button class="btn btn-sm btn-secondary ms-1" @onclick="CancelEdit">Cancel</button>
+                        }
+                        else
+                        {
+                            <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowQrAsync(individual)">QR</button>
+                            <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => StartEdit(individual)">Edit</button>
+                            <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => ConfirmDeleteAsync(individual)">Delete</button>
+                        }
+                    </td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+
+@if (_qrIndividual is not null)
+{
+    <div class="modal d-block" tabindex="-1" role="dialog">
+        <div class="modal-dialog modal-dialog-centered" role="document">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title">Registration QR — @_qrIndividual.FullName</h5>
+                    <button type="button" class="btn-close" @onclick="CloseQr"></button>
+                </div>
+                <div class="modal-body text-center">
+                    @if (_qrToken is not null)
+                    {
+                        @if (_qrToken.IsUsed)
+                        {
+                            <div class="alert alert-warning">This token has already been used. Regenerate to issue a new one.</div>
+                        }
+                        @if (!string.IsNullOrEmpty(_qrToken.QrCodePngBase64))
+                        {
+                            <img class="qr-code" src="data:image/png;base64,@_qrToken.QrCodePngBase64" alt="QR code" style="width:220px;height:220px;" />
+                            <div class="mt-2 text-muted small">@_qrToken.QrCodeUrl</div>
+                            <div class="mt-2 text-muted small">Expires: @_qrToken.ExpiresAt.ToLocalTime().ToString("g")</div>
+                            <button class="btn btn-primary mt-3" @onclick="() => PrintQrAsync()">Print</button>
+                        }
+                        else
+                        {
+                            <div class="text-muted">No QR available. Regenerate a token for this individual.</div>
+                        }
+                    }
+                    else
+                    {
+                        <div class="text-muted">No registration token yet.</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button class="btn btn-warning" @onclick="RegenerateTokenAsync">Regenerate token</button>
+                    <button class="btn btn-secondary" @onclick="CloseQr">Close</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="modal-backdrop fade show"></div>
+}
+
+@code {
+    [Inject] private AdminApiClient Api { get; set; } = default!;
+    [Inject] private IJSRuntime Js { get; set; } = default!;
+
+    private List<IndividualDto> _individuals = new();
+    private string _search = string.Empty;
+    private string? _error;
+    private string? _formError;
+    private bool _busy;
+    private bool _showAdd;
+
+    private AddIndividualModel _newIndividual = new();
+
+    private int? _editingId;
+    private string _editName = string.Empty;
+    private string _editEmail = string.Empty;
+    private string? _editDepartment;
+
+    private IndividualDto? _qrIndividual;
+    private RegistrationTokenDto? _qrToken;
+    private string? _qrImageDataUrl;
+
+    private List<IndividualDto> _filtered =>
+        string.IsNullOrWhiteSpace(_search)
+            ? _individuals
+            : _individuals.Where(i =>
+                i.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                i.EmailOrEmployeeId.Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        try
+        {
+            _individuals = await Api.GetIndividualsAsync();
+            _error = null;
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task AddIndividualAsync()
+    {
+        _busy = true;
+        _formError = null;
+        try
+        {
+            await Api.CreateIndividualAsync(_newIndividual.FullName.Trim(), _newIndividual.EmailOrEmployeeId.Trim(), _newIndividual.Department);
+            _showAdd = false;
+            _newIndividual = new AddIndividualModel();
+            await LoadAsync();
+        }
+        catch (KeyGateApiException ex)
+        {
+            _formError = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void CancelAdd()
+    {
+        _showAdd = false;
+        _newIndividual = new AddIndividualModel();
+        _formError = null;
+    }
+
+    private void StartEdit(IndividualDto individual)
+    {
+        _editingId = individual.Id;
+        _editName = individual.FullName;
+        _editEmail = individual.EmailOrEmployeeId;
+        _editDepartment = individual.Department;
+    }
+
+    private void CancelEdit() => _editingId = null;
+
+    private async Task SaveEditAsync(int id)
+    {
+        _busy = true;
+        try
+        {
+            await Api.UpdateIndividualAsync(id, _editName.Trim(), _editEmail.Trim(), _editDepartment);
+            _editingId = null;
+            await LoadAsync();
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private async Task ConfirmDeleteAsync(IndividualDto individual)
+    {
+        if (!await Js.InvokeAsync<bool>("confirm", $"Delete {individual.FullName}? This cannot be undone."))
+        {
+            return;
+        }
+
+        try
+        {
+            await Api.DeleteIndividualAsync(individual.Id);
+            await LoadAsync();
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task ShowQrAsync(IndividualDto individual)
+    {
+        _qrIndividual = individual;
+        _qrToken = individual.RegistrationToken;
+        _qrImageDataUrl = _qrToken?.QrCodePngBase64 is { } b64 ? $"data:image/png;base64,{b64}" : null;
+        await Task.CompletedTask;
+    }
+
+    private void CloseQr()
+    {
+        _qrIndividual = null;
+        _qrToken = null;
+        _qrImageDataUrl = null;
+    }
+
+    private async Task RegenerateTokenAsync()
+    {
+        if (_qrIndividual is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var result = await Api.RegenerateTokenAsync(_qrIndividual.Id);
+            _qrIndividual = _qrIndividual with { Status = result.Status, RegistrationToken = result.RegistrationToken };
+            _qrToken = result.RegistrationToken;
+            _qrImageDataUrl = $"data:image/png;base64,{result.RegistrationToken.QrCodePngBase64}";
+            await LoadAsync();
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task PrintQrAsync()
+    {
+        if (_qrImageDataUrl is not null && _qrIndividual is not null)
+        {
+            await Js.InvokeVoidAsync("printQr", _qrImageDataUrl, _qrIndividual.FullName);
+        }
+    }
+
+    public class AddIndividualModel
+    {
+        [System.ComponentModel.DataAnnotations.Required]
+        public string FullName { get; set; } = string.Empty;
+
+        [System.ComponentModel.DataAnnotations.Required]
+        public string EmailOrEmployeeId { get; set; } = string.Empty;
+
+        public string? Department { get; set; }
+    }
+}

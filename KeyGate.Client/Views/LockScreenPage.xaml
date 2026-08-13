@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+             xmlns:vm="clr-namespace:KeyGate.Client.ViewModels"
+             x:Class="KeyGate.Client.Views.LockScreenPage"
+             x:DataType="vm:LockScreenViewModel"
+             BackgroundColor="Black">
+
+    <Grid>
+        <Image Source="{Binding BackgroundImage}"
+               Aspect="AspectFill"
+               IsVisible="{Binding IsLocked}"
+               SemanticProperties.Description="Lock screen background" />
+
+        <Grid BackgroundColor="#B3000000">
+
+            <VerticalStackLayout
+                IsVisible="{Binding IsLocked}"
+                Padding="40,0"
+                Spacing="16"
+                VerticalOptions="Center"
+                HorizontalOptions="Center"
+                MaximumWidthRequest="520">
+
+                <Image Source="{Binding LogoImage}"
+                       HeightRequest="110"
+                       HorizontalOptions="Center"
+                       SemanticProperties.Description="KeyGate logo" />
+
+                <Label Text="{Binding Title}"
+                       FontSize="40"
+                       FontFamily="OpenSansSemibold"
+                       TextColor="White"
+                       HorizontalTextAlignment="Center"
+                       SemanticProperties.HeadingLevel="Level1" />
+
+                <Label Text="Enter your access key to unlock this computer"
+                       FontSize="16"
+                       TextColor="#CCFFFFFF"
+                       HorizontalTextAlignment="Center" />
+
+                <Entry Text="{Binding KeyEntry}"
+                       Placeholder="Access key"
+                       IsPassword="True"
+                       MaxLength="12"
+                       Keyboard="Numeric"
+                       FontSize="20"
+                       HorizontalTextAlignment="Center"
+                       BackgroundColor="White"
+                       TextColor="Black"
+                       PlaceholderColor="Gray"
+                       TextChanged="OnKeyEntryTextChanged"
+                       ReturnCommand="{Binding UnlockCommand}"
+                       ReturnCommandParameter="True" />
+
+                <Button Text="Unlock"
+                        Command="{Binding UnlockCommand}"
+                        IsEnabled="{Binding IsNotBusy}"
+                        FontSize="18"
+                        BackgroundColor="#512BD4"
+                        TextColor="White" />
+
+                <Label Text="{Binding StatusMessage}"
+                       FontSize="14"
+                       TextColor="#FFD54F"
+                       HorizontalTextAlignment="Center" />
+            </VerticalStackLayout>
+
+            <VerticalStackLayout
+                IsVisible="{Binding IsUnlocked}"
+                Padding="40,0"
+                Spacing="16"
+                VerticalOptions="Center"
+                HorizontalOptions="Center"
+                MaximumWidthRequest="520">
+
+                <Label Text="This computer is unlocked"
+                       FontSize="32"
+                       FontFamily="OpenSansSemibold"
+                       TextColor="White"
+                       HorizontalTextAlignment="Center"
+                       SemanticProperties.HeadingLevel="Level1" />
+
+                <Label Text="{Binding UserName, StringFormat='Welcome, {0}'}"
+                       FontSize="20"
+                       TextColor="#CCFFFFFF"
+                       HorizontalTextAlignment="Center" />
+
+                <Button Text="Lock"
+                        Command="{Binding LockCommand}"
+                        FontSize="18"
+                        BackgroundColor="#512BD4"
+                        TextColor="White" />
+            </VerticalStackLayout>
+        </Grid>
+
+        <Grid.GestureRecognizers>
+            <TapGestureRecognizer Command="{Binding NotifyActivityCommand}" />
+        </Grid.GestureRecognizers>
+    </Grid>
+
+</ContentPage>

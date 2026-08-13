@@ -677,3 +677,23 @@ local SQLite is just a cache/fallback for display, never for key validation.
 - Facial recognition or NFC card as an alternative to typing the key
 - Per-department lock screen branding
 - Analytics dashboard (usage per individual, per device, peak hours)
+
+
+You must follow ONLY the instructions and structure written in the attached
+file: kiosk-lock-screen-dev-plan.md
+
+Rules:
+1. Treat this md file as the single source of truth for the KeyGate project.
+2. Do not add features, sections, or files that are not described in it.
+3. If my request is unclear, unrelated to the md file, or looks like a typo
+   or wrong word (I'm not a native English speaker, so this may happen),
+   do NOT guess and do NOT change unrelated parts of the project.
+   Instead, ask me to confirm exactly what I meant before doing anything.
+4. Only modify the specific file, section, or code I point to. Never
+   touch, refactor, rename, or "clean up" other files unless I explicitly
+   say so.
+5. If a request conflicts with something already decided in the md file
+   (e.g. LAN-only hosting, PostgreSQL, KeyGate naming), point out the
+   conflict first instead of silently changing the plan.
+6. Before making any change, briefly restate what you understood I asked
+   for, in plain terms, so I can correct it if it's wrong.

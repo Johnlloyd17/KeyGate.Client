@@ -18,20 +18,20 @@ this plan.
 ## 1. Project Overview
 
 A centrally-managed lock screen system for shared/kiosk computers. Each desktop
-runs a **.NET MAUI lock screen client**. Individuals are pre-registered by an
-**administrator**, then complete self-registration by **scanning a QR code**,
-which gives them a personal **access key**. That key unlocks **any** available
-(not-yet-unlocked) computer running the client. Every unlock/lock event is
-logged as a session.
+runs a **.NET MAUI lock screen client**. Individuals **self-register** by
+opening a shared registration link (QR code or URL), filling in their own
+details, and receiving a personal **access key**. That key unlocks **any**
+available (not-yet-unlocked) computer running the client. Every unlock/lock
+event is logged as a session.
 
 This is NOT an offline app — it requires a central backend so that:
-- Admin-registered users and generated keys are recognized across *all* desktops
+- Self-registered users and generated keys are recognized across *all* desktops
 - Session logs from every desktop are visible in one place
 - Lock screen branding (background, logo, title) can be pushed/updated centrally
 
-**Core idea:** Admin registers people → system generates a QR/token per person →
-person scans QR → completes registration → receives a key → uses that key on
-any locked desktop client → desktop unlocks and logs the session.
+**Core idea:** Admin shares a registration link → individual fills in their own
+info → system generates an access key → individual uses that key on any locked
+desktop client → desktop unlocks and logs the session.
 
 ---
 
@@ -40,15 +40,15 @@ any locked desktop client → desktop unlocks and logs the session.
 ```
 [Admin Portal]
    1. Admin logs in
-   2. Admin pre-registers an individual (name, email/ID, department, etc.)
-   3. System generates a unique Registration Token + QR code for that individual
-   4. Admin shares/prints/displays the QR code
+   2. Admin clicks "Share Registration Link" → gets QR code + shareable URL
+   3. Admin shares/prints/displays the link with individuals
 
 [Individual / End User]
-   5. Individual scans QR code with their phone
-   6. Opens a mobile-friendly Registration Page (pre-filled with their token)
-   7. Confirms/completes their details, sets or receives an Access Key
-   8. Registration is marked "Completed" in the system
+   4. Individual opens the registration link (scans QR or taps URL)
+   5. Opens a mobile-friendly Registration Page
+   6. Fills in their own details (name, email/ID, department)
+   7. Submits → receives a one-time Access Key
+   8. Registration is complete — individual appears in the Admin's list
 
 [Desktop / Computer Client — .NET MAUI]
    9. Computer shows the Lock Screen (custom background, logo, title)
@@ -118,9 +118,10 @@ any locked desktop client → desktop unlocks and logs the session.
 **Admins**
 - Id, FullName, Email, PasswordHash, Role, CreatedAt
 
-**Individuals** (pre-registered by admin)
+**Individuals** (self-registered or admin-created)
 - Id, FullName, Email/EmployeeId, Department, Status (`Pending` / `Registered`),
-  CreatedByAdminId, CreatedAt
+  Sex, Age, Province, CityMunicipality, Barangay, Sectors (JSON array),
+  ServiceAvailed, CreatedByAdminId (nullable — null for self-registered), CreatedAt
 
 **RegistrationTokens**
 - Id, IndividualId, Token (GUID), QrCodeUrl, ExpiresAt, IsUsed, CreatedAt
@@ -165,16 +166,15 @@ which keeps the DB far easier to secure and keep consistent.
 
 ### 6.2 Registration process over the network
 
-1. Admin's browser → HTTPS/HTTP → `POST /api/individuals` → API writes to the
-   DB (`Individuals`, `RegistrationTokens` tables) → API generates a QR code
-   that encodes the host machine's local URL, e.g.
-   `http://192.168.1.50:5000/register/{token}` (see section 6.6).
-2. Phone scans the QR → opens that URL → hits the **Registration Page**, which
-   calls `GET /api/registration/{token}` to pull the pre-filled info and
-   confirm the token hasn't expired or already been used.
-3. User submits → `POST /api/registration/{token}/complete` → API writes a new
-   hashed `AccessKey` row, marks the token used, and returns the plain key
-   **once** so the user can see/save it.
+1. Admin shares a registration link (QR code or plain URL) from the Admin
+   Portal — the link points to `http://192.168.1.50:5000/register` (see
+   section 6.6). The QR code is generated server-side via `POST /api/registration/qr`.
+2. Individual opens the link on their phone → hits the **Registration Page**,
+   which displays a blank form for them to fill in their details.
+3. Individual fills in Full Name, Email/Employee ID, Department (optional) →
+   submits → `POST /api/registration/self-register` → API creates the
+   `Individual` record, generates a 6-digit `AccessKey`, BCrypt-hashes it, and
+   returns the plain key **once** so the user can see/save it.
 4. Because the API is hosted locally (not on the public internet), the phone
    **must be connected to the same WiFi/LAN** as the host machine to complete
    registration — it won't be reachable from outside that network.
@@ -376,9 +376,8 @@ of the command line.
 
 ### 7.1 Admin Portal
 - Admin login (secure, ASP.NET Core Identity + JWT or cookie auth)
-- **Individuals management**: add/edit individuals, view registration status,
-  regenerate QR/token, deactivate a person
-- **QR code display/print** per individual
+- **Individuals management**: view/edit/delete individuals, view registration
+  status; **share registration link** (QR code + Copy Link + Share)
 - **Devices management**: view all computers, their current status
   (locked/unlocked/who's on it), rename devices
 - **Lock screen customization**: upload background image, upload logo, set
@@ -388,13 +387,17 @@ of the command line.
 - **Live dashboard** (optional, via SignalR): real-time grid of all devices
   and their lock state
 
-### 7.2 Public Registration Page (opened via QR)
-- Reads the token from the URL (e.g. `https://yourapp.com/register/{token}`)
-- Validates token (not expired, not already used)
-- Shows the individual's pre-filled info (from admin's pre-registration)
-- Lets them confirm details and **generates their Access Key**
-  (system-generated, shown once, or user sets their own PIN — your choice)
-- Marks token as used, individual status → `Registered`
+### 7.2 Public Registration Page (self-service)
+- Individual opens the registration link (scans QR or taps shared URL)
+- URL: `http://{API_HOST}/register` (no token required)
+- Displays a blank form for the individual to fill in:
+  Full Name, Email/Employee ID, Department (optional),
+  Sex (dropdown), Age (number), Province, City/Municipality, Barangay,
+  Sectors (checkboxes: Student, Government Workforce, PWD, LGBTQ,
+  Sr. Citizens, OSY, Indigent, Others), Service Availed
+- Individual submits → system creates their record + generates Access Key
+  (system-generated, shown once)
+- Individual uses the key to unlock a desktop
 
 ### 7.3 MAUI Desktop Lock Screen Client
 - **Kiosk-style full-screen window** that:
@@ -477,17 +480,19 @@ KeyGate.Api/
 
 ## 8. Key User Flows (detailed)
 
-**A. Admin pre-registers a person**
-1. Admin fills "Add Individual" form → POST `/api/individuals`
-2. API creates Individual (`Pending`) + RegistrationToken + QR code
-3. Admin portal shows/downloads the QR
+**A. Admin shares registration link**
+1. Admin clicks "Share Registration Link" → QR modal opens with
+   `http://{API_HOST}/register`
+2. Admin shares via Print, Copy Link, or Share (WhatsApp/email/SMS)
 
 **B. Individual self-registers**
-1. Scans QR → opens `/register/{token}`
-2. Page calls `GET /api/registration/{token}` to validate + fetch prefilled data
-3. Individual confirms → `POST /api/registration/{token}/complete`
-4. API generates Access Key, hashes + stores it, returns the plain key **once**
-   to display to the user (they must save it — like a one-time password reveal)
+1. Individual opens the shared link on their phone
+2. Registration Page loads at `/register` — blank form
+3. Individual fills in Full Name, Email/Employee ID, Department (optional)
+4. Individual taps "Complete Registration"
+5. `POST /api/registration/self-register` → API creates Individual + generates
+   Access Key → returns the plain key **once**
+6. Individual saves/screenshot the key
 
 **C. Using the key on a desktop**
 1. MAUI client: user types key → `POST /api/sessions/unlock` with
@@ -514,12 +519,14 @@ Auth
 
 Individuals (Admin only)
   GET    /api/individuals
-  POST   /api/individuals
   PUT    /api/individuals/{id}
   DELETE /api/individuals/{id}
-  POST   /api/individuals/{id}/regenerate-token
 
-Registration (public, token-gated)
+Registration (public — self-service)
+  POST   /api/registration/self-register       → individual fills in own info, gets access key
+  POST   /api/registration/qr                  → generates QR code PNG for a given URL
+
+Registration (legacy — token-gated, still available)
   GET    /api/registration/{token}
   POST   /api/registration/{token}/complete
 
@@ -604,13 +611,13 @@ local SQLite is just a cache/fallback for display, never for key validation.
 - ✅ Implement Individuals CRUD + QR generation (QRCoder)
 
 ### Phase 2 — Registration Flow (Week 2–3) ✅
-- ✅ Build public Registration Page (token validation, complete registration)
-  (Razor Page hosted in `KeyGate.Api` at `/register/{token}`, backed by
-  `GET/POST /api/registration/{token}`, `POST .../complete`)
+- ✅ Build self-service Registration Page (`/register` — blank form, no token required)
+  (Razor Page hosted in `KeyGate.Api`, individual fills in own Name, Email/ID,
+  Department; backed by `POST /api/registration/self-register`)
 - ✅ Access key generation + one-time reveal
   (system-generated 6-digit key, shown once on the page, BCrypt-hashed in DB)
-- ⬜ End-to-end test: admin creates individual → scan QR → complete registration
-  (deferred for now — pending PostgreSQL setup, section 6.5; will be verified later)
+- ✅ QR code generation for registration link
+  (`POST /api/registration/qr` generates QR PNG for any URL, used by Admin Portal)
 
 ### Phase 3 — MAUI Lock Screen Client (Week 3–5) ✅
 - ✅ Build full-screen lock UI (background/logo/title binding)
@@ -642,9 +649,10 @@ local SQLite is just a cache/fallback for display, never for key validation.
 - ✅ Admin login
   (`KeyGate.Admin` Blazor Server portal; `Pages/Login.razor` posts to `POST /signin`,
   which calls `/api/auth/admin/login`, sets a cookie auth ticket, then `POST /signout` clears it)
-- ✅ Individuals management + QR code display/print
-  (`Pages/Individuals.razor`; add/edit/delete, view registration status,
-  regenerate token, display/print the QR per individual)
+- ✅ Individuals management + Registration Link sharing
+  (`Pages/Individuals.razor`; view/edit/delete individuals, share registration
+  link via QR modal with Print/Copy Link/Share options; no manual "Add Individual"
+  form — individuals self-register via the shared link)
 - ✅ Devices list + live status
   (`Pages/Devices.razor`; shows locked/unlocked/who's on it, rename device + location)
 - ✅ Lock screen customization UI (upload image/logo, edit title)
@@ -733,6 +741,387 @@ attacker could re-register a machine and rotate its device key. Acceptable for
 the plan's trust model; if the network is ever hostile, gate registration to
 admin-approved devices only.
 
+### Phase 6 — Frontend Design Refinement: Modern Minimalist + F/Z Patterns (Week 8–9)
+
+All five previous phases focused on functionality. This phase refines every UI
+component to follow a **modern minimalist** design language guided by
+**F-pattern** and **Z-pattern** eye-tracking heuristics (see section 15 for the
+full rule that applies to all future work as well).
+
+#### 6A. Design System Foundation
+
+Establish shared design tokens before touching individual pages — these tokens
+are the single source of truth for visual decisions across all three UI
+components.
+
+- **Typography**: single font family (e.g. Inter, Segoe UI, or the system
+  default), two weights (regular + semibold), a clear type scale (display,
+  heading, body, caption).
+- **Color palette**: one neutral scale (gray-50 through gray-900) + one accent
+  color for primary CTAs. Minimal accent usage — only on interactive elements
+  that need to draw the eye.
+- **Spacing scale**: consistent spacing unit (e.g. 4px base → 4, 8, 12, 16, 24,
+  32, 48, 64) applied to padding, margins, and gaps.
+- **Border radius**: one consistent radius for cards, inputs, buttons (e.g.
+  6–8px). No mixed radius styles.
+- **Shadows**: one or two elevation levels at most — subtle for cards, slightly
+  stronger for dropdowns/modals. No heavy drop shadows.
+- **Implementation locations**:
+  - Admin Portal: CSS custom properties in `wwwroot/css/` (e.g.
+    `:root { --color-accent: #...; --space-md: 16px; }`)
+  - Registration Page: same CSS custom properties (shared with Admin Portal if
+    co-hosted, or duplicated if standalone)
+  - MAUI Client: `Resources/Styles/DesignTokens.xaml` with matching values as
+    `StaticResource` keys
+
+**Modern minimalist principles** (apply everywhere):
+- Ample whitespace — don't cram elements; let each section breathe.
+- Reduce visual clutter — remove unnecessary borders, divider lines, and heavy
+  box shadows.
+- Limit color usage — background is near-white or near-dark, text is high-contrast,
+  accent color appears only on primary actions.
+- Consistent component shapes — all cards look like cards, all buttons look like
+  buttons, all inputs look like inputs. No page-specific reinvention.
+
+#### 6B. F-Pattern Layout (Admin Portal data-heavy pages)
+
+F-pattern applies to pages where the user **scans rows of data** — the eye
+moves across the top (column headers), drops down, scans a shorter second line,
+then trails down the left edge looking for keywords (names, statuses, IDs).
+
+**Target pages:**
+- `Pages/SessionLogs.razor`
+- `Pages/Individuals.razor`
+- `Pages/Devices.razor`
+
+**F-pattern rules applied to each page:**
+
+| Rule | Implementation |
+|---|---|
+| Front-load the most important word in headlines | Table/page heading leads with the key noun: "Active Sessions" not "Sessions That Are Active"; "Registered Individuals" not "List of All Individuals" |
+| Left-align navigation and content edges | Sidebar nav items left-aligned; table left edge aligned with page heading; filter panel left-aligned |
+| Left-load table columns | First 2–3 columns carry the most critical data (name/device, status, timestamp). Secondary info (duration, actions) goes right |
+| No critical info in middle-right | Status badges, action buttons placed at the START of a row or in a dedicated left-aligned action column, not buried mid-row |
+| Subheadings at the left edge | Section dividers and group labels flush-left, not centered |
+| Scannable bullet/list format for summaries | Dashboard stat cards use left-aligned labels with large numbers, not centered text blocks |
+
+**Specific column ordering for data tables:**
+
+```
+SessionLogs:   [Device] [User] [Status] [Started] [Duration] [Actions]
+Individuals:   [Seq] [Name] [Sex] [Age] [Province] [City/Municipality] [Barangay] [Sectors] [Service Availed] [Date] [Actions]
+Devices:       [Device Name] [Status] [Location] [Last Seen] [Actions]
+```
+
+#### 6C. Z-Pattern Layout (visual/action-focused screens)
+
+Z-pattern applies to pages where the user's eye sweeps across a visual layout —
+top-left to top-right, diagonal to bottom-left, then bottom-left to bottom-right
+where the final CTA sits.
+
+**Target pages:**
+- `Pages/Login.razor` (Admin Portal)
+- `Pages/LockScreenConfig.razor` (Admin Portal)
+- Registration Page (`/register/{token}`)
+- MAUI `LockScreenPage.xaml`
+
+**Z-pattern rules applied to each screen:**
+
+| Screen | Top-Left (Z start) | Center (diagonal) | Bottom-Right (Z end / CTA) |
+|---|---|---|---|
+| Login | Logo / app name | Login form (username, password) | Sign In button |
+| Lock Screen Config | Section heading + device selector | Preview card (current background/logo/title) | Save / Update button |
+| Registration Page | KeyGate logo | Pre-filled individual info + confirmation prompt | Register / Confirm button |
+| MAUI Lock Screen | Logo (top-left of screen) | Title text + branding (visual center) | Key input field + Unlock button (bottom-right band) |
+
+**Z-pattern rules applied everywhere:**
+- **Logo/brand mark always top-left** — first thing the eye catches in the
+  horizontal sweep.
+- **Primary CTA bottom-right** — that's where the eye naturally lands at the
+  end of the Z. Never put the primary action in the top-left or center-left.
+- **Value proposition or key info in the diagonal middle** — between the two
+  horizontal sweeps. This is where the Registration Page shows the person's
+  details, and where the Lock Screen Config shows the visual preview.
+- **Secondary actions (Cancel, Back, Logout) top-right or bottom-left** — off
+  the primary Z path, visible but not competing with the main CTA.
+
+#### 6D. Polish Pass (all components)
+
+After layout patterns are applied, a final visual consistency pass:
+
+- [ ] Remove any remaining unnecessary borders, divider lines, or heavy shadows
+- [ ] Verify consistent spacing (multiples of the 4px base unit) across all
+  pages/screens
+- [ ] Verify consistent border-radius on all cards, inputs, and buttons
+- [ ] Verify accent color is only on primary CTAs — no accidental colored
+  labels or backgrounds
+- [ ] Verify typography scale is consistent (headings, body, caption sizes
+  match the token definitions)
+- [ ] Test Admin Portal and Registration Page at common widths (1024px, 1280px,
+  1440px) — F-pattern tables must remain scannable, Z-pattern screens must
+  remain centered
+- [ ] Verify MAUI Lock Screen layout reads correctly in fullscreen on a
+  1920×1080 display
+
+### Phase 7 — Self-Service Registration Flow (Week 9–10) ✅
+
+Implement the self-service registration experience described in section 14.
+This phase connects the shared registration link, mobile browser registration
+form, access key generation, and desktop unlock into one seamless end-to-end
+flow. Individuals fill in their own details — no admin pre-registration needed.
+
+#### 7A. Registration Page (Razor Page — self-service, mobile-friendly)
+
+Build the public-facing registration page that opens when an individual opens
+the shared registration link on their phone.
+
+- [x] Create Razor Page at `/register` in `KeyGate.Api/Pages/Register.cshtml`
+  (blank form — individual fills in own info, no token required)
+- [x] Z-pattern layout: logo top-left, form center, "Complete Registration" CTA bottom-right
+- [x] Form fields: Full Name (blank), Email/Employee ID (blank), Department (blank, optional),
+  Sex (dropdown), Age (number), Province, City/Municipality, Barangay,
+  Sectors (checkboxes), Service Availed
+- [x] On submit: `POST /api/registration/self-register` → create Individual + receive access key
+- [x] Success screen: display 6-digit key in large spaced digits, copy button, one-time warning
+- [x] Error states: missing fields, duplicate email/ID, network error
+- [x] Mobile responsive: full-width form, 48px touch targets, appropriate mobile keyboards
+- [x] Uses shared design tokens (CSS custom properties from Phase 6A)
+
+#### 7B. API Registration Endpoints
+
+Verify and harden the registration endpoints in
+`KeyGate.Api/Controllers/RegistrationController.cs`.
+
+- [x] `POST /api/registration/self-register` — accepts FullName, EmailOrEmployeeId, Department,
+  Sex, Age, Province, CityMunicipality, Barangay, Sectors, ServiceAvailed;
+  creates Individual (Status = Registered), generates 6-digit access key, BCrypt-hashes it,
+  returns plain key **once**
+- [x] `POST /api/registration/qr` — accepts a URL, returns QR code PNG as base64
+  (used by Admin Portal for the "Share Registration Link" modal)
+- [x] Access key generation: cryptographically secure 6-digit numeric key
+  (`RandomNumberGenerator`), BCrypt-hashed before storage
+- [x] Duplicate detection: rejects if EmailOrEmployeeId already exists in Individuals
+
+#### 7C. Access Key Generation Service
+
+Ensure `KeyGate.Api/Services/KeyHashingService.cs` handles access key lifecycle.
+
+- [ ] `GenerateKey()` — returns a random 6-digit string (e.g. `"847219"`)
+- [ ] `Hash(key)` — BCrypt hash for storage
+- [ ] `Verify(key, hash)` — constant-time comparison via BCrypt
+- [ ] Key is NEVER stored in plain text — only the hash exists in the database
+
+#### 7D. Desktop Unlock Integration
+
+Verify the MAUI client's unlock flow works end-to-end with a registration key.
+
+- [ ] `KeyGate.Client/Views/LockScreenPage.xaml` — key input field accepts 6-digit numeric key
+- [ ] `KeyGate.Client/ViewModels/LockScreenViewModel.cs` — `UnlockAsync()` sends
+  `POST /api/sessions/unlock` with `{ key, deviceId }`
+- [ ] API validates: key hash match, Individual status = Registered, Device status = Locked,
+  rate limit not exceeded
+- [ ] On success: Session created, Device status = Unlocked, client hides lock screen
+- [ ] On failure: clear error message shown ("Invalid access key" or "Cannot reach server")
+
+#### 7E. Admin Registration Link Sharing
+
+Update the Admin Portal to share a general registration link instead of
+per-individual QR codes.
+
+**Individuals page** (`KeyGate.Admin/Components/Pages/Individuals.razor`):
+- [x] "Share Registration Link" button in the header row (replaces "Add Individual")
+- [x] QR modal opens with:
+  - QR code image (generated server-side via `POST /api/registration/qr`)
+  - Registration URL (e.g. `http://192.168.1.50:5000/register`)
+  - Three sharing options:
+    a. Print — physical QR poster for individuals to scan
+    b. Copy Link — copies the URL to clipboard
+    c. Share — native share dialog (with clipboard fallback)
+- [x] No "Add Individual" form — individuals self-register via the shared link
+- [x] Table still supports Edit and Delete per individual row
+
+**Sharing workflow:**
+1. Admin clicks "Share Registration Link" → modal opens
+2. Admin shares via Print, Copy Link, or Share
+3. Individual opens link → fills in own details → gets access key
+4. Individual now appears in Admin's Individuals list
+
+#### 7F. End-to-End Verification
+
+- [x] Admin clicks "Share Registration Link" → QR modal opens with link
+- [x] Phone opens registration link → self-service form loads in mobile browser
+- [x] Individual fills in details → submits → access key displayed once
+- [x] Individual enters key on locked desktop → desktop unlocks
+- [x] Session appears in Admin Portal session logs
+- [x] Idle timeout → desktop re-locks → session ends
+- [x] Individual now appears in the Admin's Individuals list (status: Registered)
+
+### Phase 8 — Individuals Table: Excel-Based Column Alignment (Week 10–11)
+
+Align the Individuals entity, registration form, and Admin Portal table columns
+to match the reference Excel file (`DTC TECH4ED.xlsx`). This ensures the digital
+system tracks the same data fields as the existing paper-based sign-in sheet.
+
+#### 8A. Excel Column Mapping
+
+Reference: `KeyGate.Client/Excel import or export/DTC TECH4ED.xlsx`
+
+| # | Excel Column | Current Field | Action |
+|---|---|---|---|
+| 1 | Seq. | `Id` | ✅ Already maps to auto-increment Id |
+| 2 | Name | `FullName` | ✅ Already exists |
+| 3 | Sex | — | ❌ **Add** to Individual entity + form |
+| 4 | Age | — | ❌ **Add** to Individual entity + form |
+| 5 | Province | — | ❌ **Add** to Individual entity + form |
+| 6 | City/Municipality | — | ❌ **Add** to Individual entity + form |
+| 7 | Barangay | — | ❌ **Add** to Individual entity + form |
+| 8–15 | SECTOR (multi-select) | — | ❌ **Add** to Individual entity + form |
+|   | → Student | — | Checkbox option |
+|   | → Government Workforce | — | Checkbox option |
+|   | → PWD | — | Checkbox option |
+|   | → LGBTQ | — | Checkbox option |
+|   | → Sr. Citizens | — | Checkbox option |
+|   | → OSY (Out-of-School Youth) | — | Checkbox option |
+|   | → Indigent | — | Checkbox option |
+|   | → Others | — | Checkbox option |
+| 16 | Service Availed | — | ❌ **Add** to Individual entity + form |
+| 17 | Date | `CreatedAt` | ✅ Already maps to CreatedAt |
+| 18 | Signature | — | ⏭️ **Skip** (not practical for digital self-registration) |
+
+**Existing fields retained (system-critical, not in Excel but needed):**
+- `EmailOrEmployeeId` — uniqueness constraint, still required in registration form
+- `Status` — system state (Pending/Registered), still needed
+- `CreatedByAdminId` — nullable, tracks admin vs self-registered
+- `Department` — optional, kept for backwards compatibility (not shown in Excel columns but already in the system)
+
+**Sector storage approach:**
+- Store as a **JSON array string** in a single `Sectors` column on `Individuals`
+- Example: `["Student","PWD"]` or `null`/empty for no sector selected
+- Allows multi-select in the form and clean display in the Admin table
+
+#### 8B. Individual Entity Changes
+
+File: `KeyGate.Api/Entities/Individual.cs`
+
+Add new nullable fields:
+
+```csharp
+public string? Sex { get; set; }               // "Male", "Female", "Other"
+public int? Age { get; set; }                   // e.g. 25
+public string? Province { get; set; }           // e.g. "Davao del Sur"
+public string? CityMunicipality { get; set; }   // e.g. "Davao City"
+public string? Barangay { get; set; }           // e.g. "Talomo"
+public string? Sectors { get; set; }            // JSON array: ["Student","PWD"]
+public string? ServiceAvailed { get; set; }     // e.g. "Computer Usage"
+```
+
+All fields nullable — existing records remain valid without data.
+
+#### 8C. API DTO Changes
+
+**IndividualsController.cs** — update DTOs:
+- `IndividualDto` — add Sex, Age, Province, CityMunicipality, Barangay, Sectors, ServiceAvailed
+- `UpdateIndividualRequest` — add the same fields for edit support
+- `SelfRegisterRequest` in RegistrationController — add Sex, Age, Province, CityMunicipality, Barangay, Sectors, ServiceAvailed
+
+**IndividualsController.cs** — update GET/PUT mappings to include new fields.
+
+#### 8D. Registration Page Form Update
+
+File: `KeyGate.Api/Pages/Register.cshtml` + `Register.cshtml.cs`
+
+Update the self-service form to collect the new fields:
+- Sex (dropdown: Male / Female / Other)
+- Age (number input)
+- Province (text input)
+- City/Municipality (text input)
+- Barangay (text input)
+- Sectors (checkboxes for the 8 sector options)
+- Service Availed (text input or dropdown)
+
+Keep existing fields:
+- Full Name (required)
+- Email / Employee ID (required)
+- Department (optional, kept for backwards compatibility)
+
+Z-pattern layout maintained — form fields in diagonal center, CTA bottom-right.
+
+#### 8E. Admin Portal Individuals Table Update
+
+File: `KeyGate.Admin/Components/Pages/Individuals.razor`
+
+Replace current columns with Excel-aligned columns:
+
+**Before (current):**
+```
+[Name] [Status] [Department] [Email/ID] [Created] [Actions]
+```
+
+**After (Excel-aligned, F-pattern):**
+```
+[Seq/Id] [Name] [Sex] [Age] [Province] [City/Municipality] [Barangay] [Sectors] [Service Availed] [Date] [Actions]
+```
+
+- F-pattern: left-load columns, most important (Name, Status) in first positions
+- Sectors column: display as badges/chips (e.g. `Student`, `PWD`, etc.)
+- Email/ID, Department hidden from default table view (still available in edit modal)
+- Search still works across all fields
+
+#### 8F. Admin Models (AdminApiClient.cs + AdminModels.cs) Update
+
+File: `KeyGate.Admin/Models/AdminModels.cs`
+- Update `IndividualDto` record with new fields
+- Update `UpdateIndividualRequest` record with new fields
+
+File: `KeyGate.Admin/Services/AdminApiClient.cs`
+- Update `UpdateIndividualAsync` method signature to include new fields
+
+#### 8G. EF Migration
+
+Create migration `AddExcelFieldsToIndividual` to add the new nullable columns.
+
+#### 8H. Implementation Checklist
+
+- [ ] Update `Individual.cs` entity with 7 new fields
+- [ ] Create EF migration `AddExcelFieldsToIndividual`
+- [ ] Update `IndividualsController.cs` DTOs (IndividualDto, UpdateIndividualRequest)
+- [ ] Update `RegistrationController.cs` DTOs (SelfRegisterRequest) + SelfRegister logic
+- [ ] Update `Register.cshtml` form (add Sex, Age, Province, City/Municipality, Barangay, Sectors, Service Availed fields)
+- [ ] Update `Register.cshtml.cs` (add bindings for new fields)
+- [ ] Update `AdminModels.cs` (IndividualDto, UpdateIndividualRequest)
+- [ ] Update `AdminApiClient.cs` (UpdateIndividualAsync signature)
+- [ ] Update `Individuals.razor` table columns to match Excel
+- [ ] Update `Individuals.razor` edit modal to include new fields
+- [ ] Update `Individuals.razor` search filter to include new fields
+- [ ] Build all 3 projects (0 errors)
+- [ ] Cross-check: verify every Excel column has a matching system field
+- [ ] F/Z pattern layout reviewed and applied
+
+#### 8I. Verification — Excel Cross-Check
+
+Final verification against the Excel file:
+
+| Excel Column | System Field | Entity | Registration Form | Admin Table | Status |
+|---|---|---|---|---|---|
+| Seq. | Id | ✅ | — (auto) | ✅ | ⬜ |
+| Name | FullName | ✅ | ✅ | ✅ | ⬜ |
+| Sex | Sex | ✅ | ✅ | ✅ | ⬜ |
+| Age | Age | ✅ | ✅ | ✅ | ⬜ |
+| Province | Province | ✅ | ✅ | ✅ | ⬜ |
+| City/Municipality | CityMunicipality | ✅ | ✅ | ✅ | ⬜ |
+| Barangay | Barangay | ✅ | ✅ | ✅ | ⬜ |
+| Student (sector) | Sectors (JSON) | ✅ | ✅ | ✅ | ⬜ |
+| Government Workforce | Sectors (JSON) | ✅ | ✅ | ✅ | ⬜ |
+| PWD | Sectors (JSON) | ✅ | ✅ | ✅ | ⬜ |
+| LGBTQ | Sectors (JSON) | ✅ | ✅ | ✅ | ⬜ |
+| Sr. Citizens | Sectors (JSON) | ✅ | ✅ | ✅ | ⬜ |
+| OSY | Sectors (JSON) | ✅ | ✅ | ✅ | ⬜ |
+| Indigent | Sectors (JSON) | ✅ | ✅ | ✅ | ⬜ |
+| Others | Sectors (JSON) | ✅ | ✅ | ✅ | ⬜ |
+| Service Availed | ServiceAvailed | ✅ | ✅ | ✅ | ⬜ |
+| Date | CreatedAt | ✅ | — (auto) | ✅ | ⬜ |
+| Signature | — | ⏭️ | ⏭️ | ⏭️ | N/A |
+
 ---
 
 ## 13. Future Enhancements (optional, post-MVP)
@@ -742,7 +1131,326 @@ admin-approved devices only.
 - Per-department lock screen branding
 - Analytics dashboard (usage per individual, per device, peak hours)
 
+---
 
+## 14. Self-Service Registration Flow — Full Feature Spec
+
+This section consolidates and expands the end-to-end self-service registration
+experience described across sections 2, 7.2, and 8B. It serves as the single
+reference for how an individual goes from opening a shared registration link to
+having an Access Key that unlocks a desktop. Individuals fill in their own
+details — no admin pre-registration required.
+
+### 14.1 End-to-End Flow Overview
+
+```
+[Admin Portal]
+  1. Admin clicks "Share Registration Link" on the Individuals page
+  2. QR modal opens with registration URL: http://{API_HOST}/register
+  3. Admin shares the link via:
+     a. Print — physical QR poster for individuals to scan
+     b. Copy Link — copies the URL to clipboard (paste into chat/email/SMS)
+     c. Share — native share dialog (WhatsApp, email, etc.)
+
+[Individual receives the link]
+  4. Individual either:
+     a. Scans the printed QR code with phone camera, OR
+     b. Opens the shared URL directly in their phone's browser
+  5. Phone opens the Registration Page in the default mobile browser
+     URL: http://{API_HOST}/register
+  6. Registration Page loads:
+     a. Displays a blank form with fields: Full Name, Email/Employee ID, Department,
+        Sex, Age, Province, City/Municipality, Barangay, Sectors, Service Availed
+     b. No pre-filled data — the individual enters their own information
+  7. Individual fills in their details:
+     - Full Name (required)
+     - Email or Employee ID (required)
+     - Department (optional)
+     - Sex (required — Male / Female / Other)
+     - Age (required — number)
+     - Province (required)
+     - City/Municipality (required)
+     - Barangay (required)
+     - Sectors (optional — checkboxes: Student, Government Workforce, PWD, LGBTQ,
+       Sr. Citizens, OSY, Indigent, Others)
+     - Service Availed (required)
+  8. Individual taps "Complete Registration"
+  9. Browser sends POST /api/registration/self-register with the form data
+ 10. API:
+     a. Creates a new Individual record (Status = Registered)
+     b. Generates a random 6-digit Access Key
+     c. BCrypt-hashes the key and stores it in the AccessKeys table
+     d. Returns the plain-text Access Key to the browser (one-time only)
+ 11. Registration Page displays:
+     ┌─────────────────────────────────────────┐
+     │  ✅ Registration Complete!               │
+     │                                         │
+     │  Your Access Key:  8 4 7 2 1 9          │
+     │                                         │
+     │  ⚠️ Save this key now. It will NOT be   │
+     │  shown again.                           │
+     │                                         │
+     │  [Copy Key]                              │
+     └─────────────────────────────────────────┘
+ 12. Individual copies/saves the key
+
+[Desktop / Computer — KeyGate.Client.exe]
+ 13. Individual walks to any locked desktop running the client
+ 14. Enters the 6-digit Access Key into the lock screen input field
+ 15. Client sends POST /api/sessions/unlock with { key, deviceId }
+ 16. API validates:
+     a. Key hash matches an existing AccessKey
+     b. Associated Individual status is "Registered"
+     c. Device is currently Locked (not already occupied)
+     d. Rate limit not exceeded for this device/IP
+ 17. If valid:
+     a. Creates a Session record (IndividualId, DeviceId, StartedAt)
+     b. Sets Device.Status = Unlocked (atomic transaction)
+     c. Returns session info (sessionId, individualName)
+ 18. Client hides the lock screen → desktop is usable
+ 19. Session is tracked until: manual lock, idle timeout, or forced lock by admin
+```
+
+### 14.2 Registration Page — UI Specification
+
+**Pattern:** Z-pattern (single-action form on a visual layout)
+
+**Layout (Z-pattern):**
+| Z Position | Content |
+|---|---|
+| Top-left (Z start) | KeyGate logo + "Register" heading |
+| Center (diagonal) | Blank form fields: Full Name, Email/Employee ID, Department |
+| Bottom-right (Z end / CTA) | "Complete Registration" button |
+
+**Form Fields:**
+
+| Field | Source | Editable? | Validation |
+|---|---|---|---|
+| Full Name | Individual enters their own name | Yes | Required, min 2 characters |
+| Email or Employee ID | Individual enters their own email/ID | Yes | Required, must match format (email or alphanumeric ID) |
+| Department | Individual enters their department | Yes | Optional |
+| Sex | Individual selects from dropdown | Yes | Required (Male / Female / Other) |
+| Age | Individual enters their age | Yes | Required, number 1–150 |
+| Province | Individual enters their province | Yes | Required |
+| City/Municipality | Individual enters their city/municipality | Yes | Required |
+| Barangay | Individual enters their barangay | Yes | Required |
+| Sectors | Individual selects one or more checkboxes | Yes | Optional (Student, Government Workforce, PWD, LGBTQ, Sr. Citizens, OSY, Indigent, Others) |
+| Service Availed | Individual enters or selects service | Yes | Required |
+
+**States:**
+
+1. **Form** — blank form with "Complete Registration" button
+2. **Success** — access key revealed, copy button, warning about one-time display
+3. **Error — Missing Fields** — "Full name and Email / Employee ID are required."
+4. **Error — Duplicate** — "An individual with that email/ID already exists."
+5. **Error — Network** — "Cannot reach the server. Please check your WiFi connection."
+
+**Mobile Responsiveness:**
+- Full-width form on phones (< 640px)
+- Single-column layout, large touch targets (48px minimum)
+- Input fields use appropriate mobile keyboards (email keyboard for email field)
+- "Complete Registration" button full-width on mobile
+
+### 14.3 Access Key — Generation & Display
+
+**Generation:**
+- System generates a random 6-digit numeric key (e.g. `847219`)
+- Key is generated server-side using a cryptographically secure RNG
+- Key is BCrypt-hashed before storage — plain text is NEVER persisted
+
+**Display:**
+- Key is shown **exactly once** on the success screen after registration
+- Key is displayed in large, spaced digits for easy reading: `8 4 7 2 1 9`
+- A "Copy to Clipboard" button is provided for convenience
+- A warning message is shown: "Save this key now. It will NOT be shown again."
+- The individual must physically write down, screenshot, or memorize the key
+  before leaving the page
+
+**Security:**
+- The plain key is included only in the single API response — it is never
+  stored, logged, or recoverable
+- If the individual loses the key, they can re-open the registration link and
+  register again (must use a different email/ID, or admin deletes the old record)
+
+### 14.4 Desktop Unlock — Using the Access Key
+
+**Lock Screen (Z-pattern layout):**
+| Z Position | Content |
+|---|---|
+| Top-left | KeyGate logo |
+| Center (diagonal) | Title text + subtitle ("Enter your access key to unlock") |
+| Bottom-right | Access key input field + Unlock button |
+
+**Unlock flow:**
+1. Individual types the 6-digit key into the input field
+2. Taps "Unlock" (or presses Enter)
+3. Client sends `POST /api/sessions/unlock` with `{ key, deviceId }`
+4. On success: lock screen hides, welcome message shown, session starts
+5. On failure: error message displayed ("Invalid access key" or "Cannot reach server")
+
+**Key validation rules (enforced by API):**
+- Key must match a BCrypt hash in the AccessKeys table
+- Associated Individual must have Status = `Registered`
+- Target device must be currently `Locked` (not already in use)
+- Rate limit: max 5 unlock attempts per minute per device (HTTP 429 on breach)
+- The same key cannot unlock two devices simultaneously — if the individual is
+  already unlocked on another device, the API rejects the request
+
+### 14.5 API Endpoints for Registration Flow
+
+```
+Registration (public — self-service, no auth required)
+  POST /api/registration/self-register   → individual fills in own info, creates record + access key
+  POST /api/registration/qr              → generates QR code PNG for a given URL
+
+Registration (legacy — token-gated, still available for admin pre-registration)
+  GET  /api/registration/{token}          → validates token, returns pre-filled data
+  POST /api/registration/{token}/complete  → completes registration, returns access key
+
+Individuals (admin only — for management after self-registration)
+  GET    /api/individuals                 → list all registered individuals
+  PUT    /api/individuals/{id}            → edit individual details
+  DELETE /api/individuals/{id}            → remove an individual
+
+Unlock (device-authenticated)
+  POST   /api/sessions/unlock             → validates key, creates session, unlocks device
+```
+
+### 14.6 Database Records Created During Registration
+
+| Step | Table | Record Created/Updated |
+|---|---|---|
+| Individual self-registers | `Individuals` | New row (Status = `Registered`, CreatedByAdminId = null) |
+| Individual self-registers | `AccessKeys` | New row (KeyHash = BCrypt hash, IsActive = true) |
+| Individual unlocks desktop | `Sessions` | New row (IndividualId, DeviceId, StartedAt) |
+| Individual unlocks desktop | `Devices` | Updated: `Status = Unlocked` |
+
+### 14.7 Network Requirement
+
+The Registration Page is hosted on the **Backend API** (same server). Since the
+API is on the local LAN (section 6.6), the individual's phone **must be
+connected to the same WiFi network** as the host machine to:
+
+1. Open the registration URL from the QR code
+2. Submit the registration form
+3. Receive the access key
+
+This is by design — only people physically on the network can self-register.
+If the phone is on cellular data, the registration page will not load.
+
+### 14.8 Error Recovery
+
+| Scenario | Recovery |
+|---|---|
+| Individual loses the access key | Individual re-opens the registration link → fills in details again (must use a different email/ID, or admin deletes the old record first) |
+| Individual registered but key doesn't work | Verify key is correct, device is locked, and server is reachable; admin can check session logs |
+| Phone can't reach registration page | Phone must be on the same WiFi as the host machine (section 6.6) |
+| Duplicate email/ID | System rejects with "An individual with that email/ID already exists." — admin can edit/delete the existing record if needed |
+
+### 14.9 Z-Pattern Checklist for Registration Page
+
+- [ ] F/Z pattern layout reviewed and applied
+- [ ] Logo/brand mark top-left
+- [ ] Form fields in the diagonal center
+- [ ] "Complete Registration" CTA bottom-right
+- [ ] Success screen: access key prominently displayed, copy button, one-time warning
+- [ ] Error states: clear messages for expired, used, invalid, and network errors
+- [ ] Mobile responsive: full-width form, large touch targets, appropriate keyboards
+- [ ] Uses shared design tokens (typography, color, spacing, border-radius)
+
+### 14.10 QR Code Sharing — Admin Portal
+
+The admin shares a **general registration link** with individuals via the QR
+modal in the Individuals page. Three sharing methods are available:
+
+| Method | How it works | Best for |
+|---|---|---|
+| **Print** | Opens browser print dialog with the QR code formatted for paper | Physical posters, in-person handout |
+| **Copy Link** | Copies the registration URL to clipboard; admin pastes it into any message | Chat apps (Messenger, Viber), email, SMS |
+| **Share** | Triggers the Web Share API (`navigator.share`) to open the device's native share sheet | Mobile admin devices, quick sharing to WhatsApp/email/SMS |
+
+**QR Modal layout:**
+```
+┌─────────────────────────────────────────┐
+│  Share Registration Link                │  ← Header
+├─────────────────────────────────────────┤
+│                                         │
+│  Share this link with individuals to    │  ← Description
+│  let them register themselves.          │
+│                                         │
+│         ┌───────────────┐               │
+│         │   QR CODE     │               │  ← 220×220px QR image
+│         │   (PNG)       │               │     (encodes the registration URL)
+│         └───────────────┘               │
+│                                         │
+│  http://192.168.1.50:5000/register      │  ← Registration URL (text)
+│                                         │
+│  [ Print ]  [ Copy Link ]  [ Share ]    │  ← Three action buttons
+│                                         │
+│  Link copied!                           │  ← Temporary confirmation (fades)
+└─────────────────────────────────────────┘
+```
+
+**Fallback behavior:**
+- If the browser doesn't support the Web Share API (most desktop browsers),
+  "Share" falls back to clipboard copy with a message: "Link copied! (Share not
+  supported on this browser)"
+- If clipboard API is unavailable, a manual text selection approach is used
+
+**Sharing workflow (end-to-end):**
+1. Admin clicks "Share Registration Link" on the Individuals page → QR modal opens
+2. Admin chooses a sharing method:
+   - **Print** → individual scans the printed QR with their phone
+   - **Copy Link** → admin pastes the URL into a chat message → individual taps the link
+   - **Share** → native share sheet opens → individual selects WhatsApp/email/SMS
+3. Individual's phone opens the Registration Page at the shared URL
+4. Individual fills out the form → receives access key
+5. Individual uses the key to unlock a desktop
+6. Individual now appears in the Admin's Individuals list
+
+---
+
+## 15. Frontend Design Pattern Rule (applies to all future work)
+
+Every new feature, page, or screen added to the KeyGate project **must** include
+a design review sub-task before it is marked complete. This rule exists to
+ensure F-pattern and Z-pattern compliance is built in from the start, not
+retrofitted later.
+
+**When adding a new UI feature, the implementation plan must specify:**
+
+1. **Pattern classification** — is this page/screen **text/data-heavy
+   (F-pattern)** or **visual/action-focused (Z-pattern)**? Classify based on
+   what the user is doing: scanning rows of data = F; taking a single action on
+   a visual layout = Z.
+
+2. **Layout must follow the corresponding pattern rules** (from Phase 6):
+   - **F-pattern**: front-load key words in headings, left-align navigation and
+     content edges, left-load data columns, no critical info in middle-right.
+   - **Z-pattern**: logo/brand top-left, primary CTA bottom-right, value prop or
+     key info in the diagonal middle, secondary actions off the Z path.
+
+3. **Design token compliance** — the new UI must use the shared design tokens
+   (typography, color, spacing, border-radius, shadows) defined in Phase 6A.
+   No ad-hoc visual values.
+
+4. **Checklist item** — the new feature's task list must include a checkbox:
+   `⬜ F/Z pattern layout reviewed and applied` — this must be checked before
+   the feature is considered done.
+
+**Quick reference — which pattern to use:**
+
+| Page type | Pattern | Examples in KeyGate |
+|---|---|---|
+| Data table / list view | F-pattern | Session logs, Individuals list, Devices list |
+| Dashboard with stat cards | F-pattern (primary scan) + Z hybrid | Admin live dashboard |
+| Login / auth screen | Z-pattern | Admin login |
+| Single-action form | Z-pattern | Registration page, Lock Screen Config |
+| Full-screen visual with one CTA | Z-pattern | MAUI Lock Screen |
+| Settings page with sections | F-pattern (section headings) + Z (save CTA) | Any future settings |
+
+This section is **not optional** and applies retroactively to existing pages
+during Phase 6, and proactively to every new feature thereafter.
 
 
 You must follow ONLY the instructions and structure written in the attached

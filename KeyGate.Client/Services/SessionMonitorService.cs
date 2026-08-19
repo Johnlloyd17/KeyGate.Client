@@ -3,15 +3,17 @@ namespace KeyGate.Client.Services;
 public class SessionMonitorService
 {
     private readonly AppSettings _settings;
+    private readonly IUserActivityMonitor _activityMonitor;
     private IDispatcherTimer? _timer;
     private DateTime _lastActivityUtc = DateTime.UtcNow;
     private bool _isMonitoring;
 
     public event EventHandler? IdleDetected;
 
-    public SessionMonitorService(AppSettings settings)
+    public SessionMonitorService(AppSettings settings, IUserActivityMonitor activityMonitor)
     {
         _settings = settings;
+        _activityMonitor = activityMonitor;
     }
 
     public bool IsMonitoring => _isMonitoring;
@@ -56,6 +58,12 @@ public class SessionMonitorService
         if (!_isMonitoring)
         {
             return;
+        }
+
+        var systemInputUtc = _activityMonitor.GetLastInputTimeUtc();
+        if (systemInputUtc > _lastActivityUtc)
+        {
+            _lastActivityUtc = systemInputUtc;
         }
 
         if ((DateTime.UtcNow - _lastActivityUtc).TotalMinutes >= _settings.IdleTimeoutMinutes)

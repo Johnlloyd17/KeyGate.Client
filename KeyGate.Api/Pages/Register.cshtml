@@ -1,8 +1,7 @@
-@page "~/register/{token}"
+@page "~/register"
 @model KeyGate.Api.Pages.RegisterModel
 @{
     Layout = null;
-    var token = RouteData.Values["token"]?.ToString();
 }
 <!DOCTYPE html>
 <html lang="en">
@@ -11,108 +10,259 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>KeyGate Registration</title>
     <style>
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         body {
-            font-family: "Segoe UI", Roboto, Arial, sans-serif;
-            background: #1e2430;
-            color: #e8eaed;
+            font-family: 'Inter', 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background: #0f172a;
+            color: #e2e8f0;
             display: flex;
             align-items: center;
             justify-content: center;
             min-height: 100vh;
             padding: 16px;
+            -webkit-font-smoothing: antialiased;
+            line-height: 1.5;
         }
         .card {
-            background: #2a3242;
+            background: #1e293b;
             border-radius: 12px;
-            padding: 28px;
+            padding: 32px;
             width: 100%;
-            max-width: 380px;
-            box-shadow: 0 8px 24px rgba(0,0,0,.35);
+            max-width: 500px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
             text-align: center;
         }
-        h1 { font-size: 22px; margin-bottom: 4px; color: #fff; }
-        .subtitle { color: #9aa4b8; font-size: 13px; margin-bottom: 20px; }
-        .detail {
-            background: #1e2430;
-            border-radius: 8px;
-            padding: 12px 14px;
-            margin-bottom: 10px;
-            text-align: left;
+        h1 { font-size: 20px; font-weight: 600; margin-bottom: 4px; color: #f8fafc; letter-spacing: -0.01em; }
+        .subtitle { color: #64748b; font-size: 13px; margin-bottom: 24px; }
+        .form-group { text-align: left; margin-bottom: 14px; }
+        .form-group label {
+            display: block;
+            font-size: 12px;
+            font-weight: 500;
+            color: #94a3b8;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
-        .detail .label { font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #9aa4b8; }
-        .detail .value { font-size: 15px; margin-top: 2px; word-break: break-word; }
-        button {
+        .form-group input {
             width: 100%;
-            padding: 14px;
-            margin-top: 14px;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .form-group input:focus { border-color: #2563eb; }
+        .form-group input::placeholder { color: #475569; }
+        .form-group select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.15s;
+        }
+        .form-group select:focus { border-color: #2563eb; }
+        button[type="submit"] {
+            width: 100%;
+            padding: 12px;
+            margin-top: 8px;
             border: 0;
             border-radius: 8px;
-            background: #3b82f6;
+            background: #2563eb;
             color: #fff;
-            font-size: 16px;
+            font-size: 15px;
             font-weight: 600;
             cursor: pointer;
+            transition: background-color 0.15s;
         }
-        button:hover { background: #2f6fe0; }
+        button[type="submit"]:hover { background: #1d4ed8; }
         .key {
-            font-size: 40px;
+            font-size: 36px;
             font-weight: 700;
             letter-spacing: 8px;
-            color: #4ade80;
+            color: #16a34a;
             margin: 8px 0 16px;
         }
-        .note { font-size: 13px; color: #9aa4b8; line-height: 1.5; }
-        .error {
-            color: #f87171;
-            background: #3a2b2b;
-            border-radius: 8px;
-            padding: 14px;
-            font-size: 14px;
+        .note { font-size: 13px; color: #64748b; line-height: 1.5; }
+        .success-box {
+            background: #064e3b;
+            border: 1px solid #059669;
+            border-radius: 12px;
+            padding: 24px;
+            text-align: center;
         }
-        .expires { font-size: 12px; color: #9aa4b8; margin-top: 12px; }
+        .success-box .checkmark { font-size: 32px; margin-bottom: 8px; }
+        .success-box h2 { font-size: 18px; font-weight: 600; color: #f8fafc; margin-bottom: 12px; }
+        .key-label { font-size: 12px; color: #6ee7b7; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px; }
+        .key-value {
+            font-size: 36px;
+            font-weight: 700;
+            letter-spacing: 8px;
+            color: #34d399;
+            margin: 8px 0 16px;
+            font-family: 'Courier New', monospace;
+        }
+        .copy-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 10px 20px;
+            border: 1px solid #059669;
+            border-radius: 8px;
+            background: transparent;
+            color: #34d399;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: background-color 0.15s;
+            width: auto;
+            margin-top: 0;
+        }
+        .copy-btn:hover { background: #065f46; }
+        .copy-btn.copied { background: #059669; color: #fff; }
+        .warning {
+            font-size: 12px;
+            color: #fbbf24;
+            background: #451a1a;
+            border-radius: 6px;
+            padding: 8px 12px;
+            margin-top: 12px;
+        }
+        .error {
+            color: #dc2626;
+            background: #451a1a;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 14px;
+            margin-bottom: 12px;
+        }
     </style>
 </head>
 <body>
     <div class="card">
-        <h1>KeyGate</h1>
-        <p class="subtitle">Complete your account registration</p>
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:20px;justify-content:center;">
+            <div style="width:28px;height:28px;border-radius:8px;background:#2563eb;display:flex;align-items:center;justify-content:center;">
+                <span style="color:#fff;font-weight:700;font-size:14px;">K</span>
+            </div>
+            <span style="font-weight:600;font-size:15px;color:#f8fafc;">KeyGate</span>
+        </div>
 
         @if (!string.IsNullOrEmpty(Model.ErrorMessage))
         {
+            <h1>Register</h1>
+            <p class="subtitle">Enter your details to get your access key</p>
             <div class="error">@Model.ErrorMessage</div>
         }
         else if (!string.IsNullOrEmpty(Model.AccessKey))
         {
-            <p class="note">Registration complete, @Model.FullName. Your personal access key is:</p>
-            <div class="key">@Model.AccessKey</div>
-            <p class="note">Save it now — it is shown only once and unlocks any KeyGate computer.</p>
+            <div class="success-box">
+                <div class="checkmark">&#10003;</div>
+                <h2>Registration Complete!</h2>
+                <p class="note" style="color:#a7f3d0;">Welcome, @Model.FullName</p>
+                <div class="key-label">Your Access Key</div>
+                <div class="key-value" id="accessKey">@Model.AccessKey</div>
+                <button type="button" class="copy-btn" id="copyKeyBtn" onclick="copyKey()">Copy Key</button>
+                <div class="warning">Save this key now. It will NOT be shown again.</div>
+            </div>
+            <script>
+                function copyKey() {
+                    var key = document.getElementById('accessKey').textContent.trim();
+                    navigator.clipboard.writeText(key).then(function() {
+                        var btn = document.getElementById('copyKeyBtn');
+                        btn.textContent = 'Copied!';
+                        btn.classList.add('copied');
+                        setTimeout(function() {
+                            btn.textContent = 'Copy Key';
+                            btn.classList.remove('copied');
+                        }, 2000);
+                    });
+                }
+            </script>
         }
-        else if (!string.IsNullOrEmpty(Model.FullName))
+        else
         {
+            <h1>Register</h1>
+            <p class="subtitle">Enter your details to get your access key</p>
             <form method="post">
                 @Html.AntiForgeryToken()
-                <div class="detail">
-                    <div class="label">Name</div>
-                    <div class="value">@Model.FullName</div>
+                <div class="form-group">
+                    <label for="fullName">Full Name</label>
+                    <input type="text" id="fullName" name="FullName" placeholder="e.g. Juan Dela Cruz" required value="@Model.FullName" />
                 </div>
-                <div class="detail">
-                    <div class="label">Email / ID</div>
-                    <div class="value">@Model.EmailOrEmployeeId</div>
+                <div class="form-group">
+                    <label for="emailId">Email / Employee ID</label>
+                    <input type="text" id="emailId" name="EmailOrEmployeeId" placeholder="e.g. juan@company.com" required value="@Model.EmailOrEmployeeId" />
                 </div>
-                @if (!string.IsNullOrEmpty(Model.Department))
-                {
-                    <div class="detail">
-                        <div class="label">Department</div>
-                        <div class="value">@Model.Department</div>
+                <div class="form-group">
+                    <label for="dept">Department (optional)</label>
+                    <input type="text" id="dept" name="Department" placeholder="e.g. IT" value="@Model.Department" />
+                </div>
+                <div class="form-group">
+                    <label for="sex">Sex</label>
+                    <select id="sex" name="Sex" required>
+                        <option value="">Select...</option>
+                        <option value="Male" selected="@(Model.Sex == "Male")">Male</option>
+                        <option value="Female" selected="@(Model.Sex == "Female")">Female</option>
+                        <option value="Other" selected="@(Model.Sex == "Other")">Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="age">Age</label>
+                    <input type="number" id="age" name="Age" min="1" max="150" required value="@Model.Age" />
+                </div>
+                <div class="form-group">
+                    <label for="province">Province</label>
+                    <input type="text" id="province" name="Province" placeholder="e.g. Davao del Sur" required value="@Model.Province" />
+                </div>
+                <div class="form-group">
+                    <label for="cityMunicipality">City / Municipality</label>
+                    <input type="text" id="cityMunicipality" name="CityMunicipality" placeholder="e.g. Davao City" required value="@Model.CityMunicipality" />
+                </div>
+                <div class="form-group">
+                    <label for="barangay">Barangay</label>
+                    <input type="text" id="barangay" name="Barangay" placeholder="e.g. Talomo" required value="@Model.Barangay" />
+                </div>
+                <div class="form-group">
+                    <label>Sector (optional)</label>
+                    <div style="display:flex;flex-wrap:wrap;gap:6px 14px;">
+                        <label style="font-size:12px;display:flex;align-items:center;gap:4px;color:#94a3b8;">
+                            <input type="checkbox" name="SectorValues" value="Student" /> Student
+                        </label>
+                        <label style="font-size:12px;display:flex;align-items:center;gap:4px;color:#94a3b8;">
+                            <input type="checkbox" name="SectorValues" value="Government Workforce" /> Government Workforce
+                        </label>
+                        <label style="font-size:12px;display:flex;align-items:center;gap:4px;color:#94a3b8;">
+                            <input type="checkbox" name="SectorValues" value="PWD" /> PWD
+                        </label>
+                        <label style="font-size:12px;display:flex;align-items:center;gap:4px;color:#94a3b8;">
+                            <input type="checkbox" name="SectorValues" value="LGBTQ" /> LGBTQ
+                        </label>
+                        <label style="font-size:12px;display:flex;align-items:center;gap:4px;color:#94a3b8;">
+                            <input type="checkbox" name="SectorValues" value="Sr. Citizens" /> Sr. Citizens
+                        </label>
+                        <label style="font-size:12px;display:flex;align-items:center;gap:4px;color:#94a3b8;">
+                            <input type="checkbox" name="SectorValues" value="OSY" /> OSY
+                        </label>
+                        <label style="font-size:12px;display:flex;align-items:center;gap:4px;color:#94a3b8;">
+                            <input type="checkbox" name="SectorValues" value="Indigent" /> Indigent
+                        </label>
+                        <label style="font-size:12px;display:flex;align-items:center;gap:4px;color:#94a3b8;">
+                            <input type="checkbox" name="SectorValues" value="Others" /> Others
+                        </label>
                     </div>
-                }
-                <p class="note">Confirm that these details are correct. Your access key will be generated and shown to you once.</p>
+                </div>
+                <div class="form-group">
+                    <label for="serviceAvailed">Service Availed</label>
+                    <input type="text" id="serviceAvailed" name="ServiceAvailed" placeholder="e.g. Computer Usage" required value="@Model.ServiceAvailed" />
+                </div>
                 <button type="submit">Complete Registration</button>
-                @if (Model.ExpiresAt.HasValue)
-                {
-                    <p class="expires">Link expires: @Model.ExpiresAt.Value.ToLocalTime().ToString("g")</p>
-                }
             </form>
         }
     </div>

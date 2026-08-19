@@ -12,8 +12,13 @@ public class DeviceStatusListener : IAsyncDisposable
 
     private HubConnection? _connection;
     private bool _started;
+    private bool _disposed;
 
     public event Action<DeviceStatusChangedEvent>? DeviceStatusChanged;
+    public event Action<IndividualChangedEvent>? IndividualChanged;
+    public event Action<SessionChangedEvent>? SessionChanged;
+    public event Action<LockScreenConfigChangedEvent>? LockScreenConfigChanged;
+    public event Action<DeviceChangedEvent>? DeviceChanged;
 
     public DeviceStatusListener(IConfiguration configuration, AuthenticationStateProvider authStateProvider)
     {
@@ -23,7 +28,7 @@ public class DeviceStatusListener : IAsyncDisposable
 
     public async Task EnsureStartedAsync()
     {
-        if (_started)
+        if (_started || _disposed)
         {
             return;
         }
@@ -40,6 +45,10 @@ public class DeviceStatusListener : IAsyncDisposable
             .Build();
 
         _connection.On<DeviceStatusChangedEvent>("DeviceStatusChanged", OnDeviceStatusChanged);
+        _connection.On<IndividualChangedEvent>("IndividualChanged", OnIndividualChanged);
+        _connection.On<SessionChangedEvent>("SessionChanged", OnSessionChanged);
+        _connection.On<LockScreenConfigChangedEvent>("LockScreenConfigChanged", OnLockScreenConfigChanged);
+        _connection.On<DeviceChangedEvent>("DeviceChanged", OnDeviceChanged);
 
         await _connection.StartAsync();
         _started = true;
@@ -47,16 +56,56 @@ public class DeviceStatusListener : IAsyncDisposable
 
     private void OnDeviceStatusChanged(DeviceStatusChangedEvent @event)
     {
-        DeviceStatusChanged?.Invoke(@event);
+        if (_disposed) return;
+        try { DeviceStatusChanged?.Invoke(@event); } catch { }
+    }
+
+    private void OnIndividualChanged(IndividualChangedEvent @event)
+    {
+        if (_disposed) return;
+        try { IndividualChanged?.Invoke(@event); } catch { }
+    }
+
+    private void OnSessionChanged(SessionChangedEvent @event)
+    {
+        if (_disposed) return;
+        try { SessionChanged?.Invoke(@event); } catch { }
+    }
+
+    private void OnLockScreenConfigChanged(LockScreenConfigChangedEvent @event)
+    {
+        if (_disposed) return;
+        try { LockScreenConfigChanged?.Invoke(@event); } catch { }
+    }
+
+    private void OnDeviceChanged(DeviceChangedEvent @event)
+    {
+        if (_disposed) return;
+        try { DeviceChanged?.Invoke(@event); } catch { }
     }
 
     public async ValueTask DisposeAsync()
     {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _disposed = true;
+        _started = false;
+
         if (_connection is not null)
         {
-            await _connection.DisposeAsync();
+            try
+            {
+                await _connection.DisposeAsync();
+            }
+            catch
+            {
+                // Connection may already be faulted — safe to ignore.
+            }
+
             _connection = null;
-            _started = false;
         }
     }
 }

@@ -1,22 +1,62 @@
 @page "/sessions"
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 
 <PageTitle>Sessions — KeyGate Admin</PageTitle>
 
-<h1>Sessions</h1>
+<h1>Session Logs</h1>
 
 @if (_error is not null)
 {
     <div class="alert alert-danger">@_error</div>
 }
 
+<!-- Metric Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Total Sessions</div>
+                <div class="fw-bold" style="font-size:1.75rem;">@_sessions.Count</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Active</div>
+                <div class="fw-bold" style="font-size:1.75rem; color:var(--kg-success);">@_sessions.Count(s => s.EndedAt is null)</div>
+                <div class="small text-muted">in progress</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Completed</div>
+                <div class="fw-bold" style="font-size:1.75rem;">@_sessions.Count(s => s.EndedAt is not null)</div>
+                <div class="small text-muted">ended sessions</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Avg. Duration</div>
+                <div class="fw-bold" style="font-size:1.75rem;">@FormatDuration(_avgDuration)</div>
+                <div class="small text-muted">of completed</div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="card mb-3">
-    <div class="card-body">
-        <div class="row g-3 align-items-end">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
             <div class="col-md-3">
-                <label class="form-label">Individual</label>
-                <select class="form-select" @bind="_selectedIndividualId">
+                <label class="form-label small">Individual</label>
+                <select class="form-select form-select-sm" @bind="_selectedIndividualId">
                     <option value="">All</option>
                     @foreach (var individual in _individuals)
                     {
@@ -25,8 +65,8 @@
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">Device</label>
-                <select class="form-select" @bind="_selectedDeviceId">
+                <label class="form-label small">Device</label>
+                <select class="form-select form-select-sm" @bind="_selectedDeviceId">
                     <option value="">All</option>
                     @foreach (var device in _devices)
                     {
@@ -35,15 +75,16 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <label class="form-label">From</label>
-                <input type="date" class="form-control" @bind="_fromDate" />
+                <label class="form-label small">From</label>
+                <input type="date" class="form-control form-control-sm" @bind="_fromDate" />
             </div>
             <div class="col-md-2">
-                <label class="form-label">To</label>
-                <input type="date" class="form-control" @bind="_toDate" />
+                <label class="form-label small">To</label>
+                <input type="date" class="form-control form-control-sm" @bind="_toDate" />
             </div>
-            <div class="col-md-2">
-                <button class="btn btn-primary w-100" @onclick="ApplyFiltersAsync" disabled="@_busy">Apply</button>
+            <div class="col-md-2 d-flex gap-2">
+                <button class="btn btn-primary btn-sm" @onclick="ApplyFiltersAsync" disabled="@_busy">Apply</button>
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ResetFiltersAsync">Reset</button>
             </div>
         </div>
     </div>
@@ -51,19 +92,44 @@
 
 <div class="mb-2 d-flex justify-content-between align-items-center">
     <span class="text-muted">@_sessions.Count session(s) shown</span>
-    <button class="btn btn-outline-success btn-sm" @onclick="ExportCsvAsync" disabled="@(_sessions.Count == 0)">Export CSV</button>
+    <div class="d-flex gap-2 align-items-center">
+        <div class="dropdown">
+            <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" @onclick:preventDefault>Columns</button>
+            <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:200px;">
+                @foreach (var col in AllSessionColumns)
+                {
+                    <li>
+                        <label class="dropdown-item d-flex align-items-center gap-2 mb-0">
+                            <input type="checkbox" class="form-check-input"
+                                   checked="@_exportColumns.Contains(col.Key)"
+                                   @onchange="() => ToggleExportColumn(col.Key)" />
+                            @col.Label
+                        </label>
+                    </li>
+                }
+                <li><hr class="dropdown-divider" /></li>
+                <li>
+                    <button class="dropdown-item small" @onclick="SelectAllColumns">Select all</button>
+                </li>
+                <li>
+                    <button class="dropdown-item small" @onclick="() => _exportColumns.Clear()">Deselect all</button>
+                </li>
+            </ul>
+        </div>
+        <button class="btn btn-outline-success btn-sm" @onclick='() => ExportAsync("xlsx")' disabled="@(_sessions.Count == 0)">Export</button>
+    </div>
 </div>
 
 <div class="table-responsive">
     <table class="table table-striped table-hover">
         <thead>
             <tr>
-                <th>Individual</th>
                 <th>Device</th>
+                <th>User</th>
+                <th>Status</th>
                 <th>Started</th>
-                <th>Ended</th>
                 <th>Duration</th>
-                <th>End reason</th>
+                <th class="text-end">Actions</th>
             </tr>
         </thead>
         <tbody>
@@ -74,12 +140,30 @@
             @foreach (var session in _sessions)
             {
                 <tr>
-                    <td>@session.IndividualName</td>
                     <td>@session.DeviceName</td>
+                    <td>@session.IndividualName</td>
+                    <td>
+                        @if (session.EndedAt is null)
+                        {
+                            <span class="badge text-bg-success status-badge">Active</span>
+                        }
+                        else
+                        {
+                            <span class="badge text-bg-secondary status-badge">Completed</span>
+                        }
+                    </td>
                     <td>@session.StartedAt.ToLocalTime().ToString("g")</td>
-                    <td>@(session.EndedAt?.ToLocalTime().ToString("g") ?? "Active")</td>
-                    <td>@FormatDuration(session.DurationSeconds)</td>
-                    <td>@(session.EndReason ?? "—")</td>
+                    <td>@(session.DurationSeconds.HasValue ? FormatDuration(session.DurationSeconds.Value) : "—")</td>
+                    <td class="text-end text-nowrap">
+                        @if (session.EndedAt is not null && session.EndReason is not null)
+                        {
+                            <span class="text-muted small">@session.EndReason</span>
+                        }
+                        else if (session.EndedAt is null)
+                        {
+                            <span class="text-muted small">In progress</span>
+                        }
+                    </td>
                 </tr>
             }
         </tbody>
@@ -89,12 +173,26 @@
 @code {
     [Inject] private AdminApiClient Api { get; set; } = default!;
     [Inject] private IJSRuntime Js { get; set; } = default!;
+    [Inject] private DeviceStatusListener Listener { get; set; } = default!;
+    [Inject] private BrowserFileDownload Download { get; set; } = default!;
+
+    private static readonly (string Key, string Label)[] AllSessionColumns = new[]
+    {
+        ("Device", "Device"),
+        ("User", "User"),
+        ("Status", "Status"),
+        ("Started", "Started"),
+        ("Duration", "Duration"),
+        ("EndReason", "End Reason")
+    };
 
     private List<IndividualDto> _individuals = new();
     private List<DeviceDto> _devices = new();
     private List<SessionDto> _sessions = new();
     private string? _error;
     private bool _busy;
+    private double _avgDuration;
+    private HashSet<string> _exportColumns = AllSessionColumns.Select(c => c.Key).ToHashSet();
 
     private string _selectedIndividualId = string.Empty;
     private string _selectedDeviceId = string.Empty;
@@ -119,6 +217,16 @@
         {
             _error = ex.Message;
         }
+
+        try
+        {
+            await Listener.EnsureStartedAsync();
+            Listener.SessionChanged += HandleSessionChanged;
+        }
+        catch
+        {
+            // SignalR is optional.
+        }
     }
 
     private async Task ApplyFiltersAsync()
@@ -131,6 +239,9 @@
             var to = _toDate.HasValue ? _toDate.Value.Date.AddDays(1).ToUniversalTime() : (DateTime?)null;
 
             _sessions = await Api.GetSessionsAsync(SelectedIndividualId, SelectedDeviceId, from, to);
+
+            var completed = _sessions.Where(s => s.DurationSeconds.HasValue).ToList();
+            _avgDuration = completed.Count > 0 ? completed.Average(s => s.DurationSeconds!.Value) : 0;
         }
         catch (KeyGateApiException ex)
         {
@@ -142,32 +253,68 @@
         }
     }
 
-    private static string FormatDuration(int? seconds)
+    private async Task ResetFiltersAsync()
     {
-        if (seconds is null)
-        {
-            return "—";
-        }
-        return TimeSpan.FromSeconds(seconds.Value).ToString(@"h\:mm\:ss");
+        _selectedIndividualId = string.Empty;
+        _selectedDeviceId = string.Empty;
+        _fromDate = null;
+        _toDate = null;
+        await ApplyFiltersAsync();
     }
 
-    private async Task ExportCsvAsync()
+    private static string FormatDuration(double totalSeconds)
     {
-        var csv = new System.Text.StringBuilder();
-        csv.AppendLine("Individual,Device,Started,Ended,DurationSeconds,EndReason");
-        foreach (var s in _sessions)
-        {
-            var started = s.StartedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-            var ended = s.EndedAt?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss") ?? "Active";
-            csv.AppendLine($"{CsvEscape(s.IndividualName)},{CsvEscape(s.DeviceName)},{started},{ended},{s.DurationSeconds?.ToString() ?? ""},{CsvEscape(s.EndReason ?? string.Empty)}");
-        }
-
-        await Js.InvokeVoidAsync("downloadCsv", $"keygate-sessions-{DateTime.Now:yyyyMMdd-HHmmss}.csv", csv.ToString());
+        if (totalSeconds < 60) return $"{(int)totalSeconds}s";
+        var h = (int)(totalSeconds / 3600);
+        var m = (int)((totalSeconds % 3600) / 60);
+        return h > 0 ? $"{h}h {m}m" : $"{m}m";
     }
 
-    private static string CsvEscape(string value)
+    private async Task ExportAsync(string format)
     {
-        const char quote = '"';
-        return $"{quote}{value.Replace(quote.ToString(), quote.ToString() + quote)}{quote}";
+        _busy = true;
+        _error = null;
+        try
+        {
+            var ext = format == "csv" ? "csv" : "xlsx";
+            var contentType = format == "csv" ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            var columns = _exportColumns.Count < AllSessionColumns.Length ? _exportColumns : null;
+            var bytes = await Api.ExportSessionsAsync(ext, columns);
+            await Download.DownloadFileAsync($"sessions_{DateTime.UtcNow:yyyyMMdd}.{ext}", bytes, contentType);
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ToggleExportColumn(string key)
+    {
+        if (!_exportColumns.Remove(key))
+            _exportColumns.Add(key);
+    }
+
+    private void SelectAllColumns()
+    {
+        _exportColumns = AllSessionColumns.Select(c => c.Key).ToHashSet();
+    }
+
+    private void HandleSessionChanged(SessionChangedEvent @event)
+    {
+        InvokeAsync(async () =>
+        {
+            await ApplyFiltersAsync();
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Listener.SessionChanged -= HandleSessionChanged;
+        await Listener.DisposeAsync();
     }
 }

@@ -10,6 +10,35 @@ window.downloadCsv = function (fileName, csvContent) {
     URL.revokeObjectURL(url);
 };
 
+window.downloadFile = function (fileName, bytesBase64, contentType) {
+    var binary = atob(bytesBase64);
+    var bytes = new Uint8Array(binary.length);
+    for (var i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+    }
+    var blob = new Blob([bytes], { type: contentType });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+};
+
+window.downloadFileBytes = function (fileName, byteArray, contentType) {
+    var blob = new Blob([new Uint8Array(byteArray)], { type: contentType });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = fileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function () { URL.revokeObjectURL(url); }, 5000);
+};
+
 window.printQr = function (imageDataUrl, title) {
     const w = window.open('', '_blank', 'width=440,height=560');
     if (!w) {

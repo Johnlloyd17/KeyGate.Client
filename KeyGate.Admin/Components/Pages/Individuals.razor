@@ -1,58 +1,141 @@
 @page "/individuals"
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
+@implements IAsyncDisposable
+
+<style>
+    main {
+        min-width: 0;
+        overflow-x: hidden;
+    }
+</style>
 
 <PageTitle>Individuals — KeyGate Admin</PageTitle>
 
-<h1>Individuals</h1>
+<h1>Registered Individuals</h1>
 
 @if (_error is not null)
 {
     <div class="alert alert-danger">@_error</div>
 }
 
-<div class="row mb-3 g-2 align-items-center">
-    <div class="col-md-6">
-        <input class="form-control" type="search" placeholder="Search by name or email/ID…" @bind="_search" @bind:event="oninput" />
+<!-- Metric Cards -->
+<div class="row mb-4">
+    <div class="col-md-3 col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Total Individuals</div>
+                <div class="fw-bold" style="font-size:1.75rem;">@_individuals.Count</div>
+            </div>
+        </div>
     </div>
-    <div class="col-md-6 text-md-end">
-        <button class="btn btn-primary" @onclick="() => _showAdd = true" disabled="@(_showAdd)">Add individual</button>
+    <div class="col-md-3 col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Registered</div>
+                <div class="fw-bold" style="font-size:1.75rem;">@_individuals.Count(i => i.Status == "Registered")</div>
+                <div class="small text-muted">of @_individuals.Count total</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Male</div>
+                <div class="fw-bold" style="font-size:1.75rem;">@_individuals.Count(i => i.Sex == "Male")</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-6">
+        <div class="card h-100">
+            <div class="card-body">
+                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Female</div>
+                <div class="fw-bold" style="font-size:1.75rem;">@_individuals.Count(i => i.Sex == "Female")</div>
+            </div>
+        </div>
     </div>
 </div>
 
-@if (_showAdd)
-{
-    <div class="card mb-3">
-        <div class="card-header">Add individual</div>
-        <div class="card-body">
-            <EditForm Model="@_newIndividual" OnValidSubmit="AddIndividualAsync">
-                <DataAnnotationsValidator />
-                <div class="row g-3">
-                    <div class="col-md-4">
-                        <label class="form-label">Full name</label>
-                        <InputText class="form-control" @bind-Value="_newIndividual.FullName" />
-                        <ValidationMessage For="@(() => _newIndividual.FullName)" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Email / Employee ID</label>
-                        <InputText class="form-control" @bind-Value="_newIndividual.EmailOrEmployeeId" />
-                        <ValidationMessage For="@(() => _newIndividual.EmailOrEmployeeId)" />
-                    </div>
-                    <div class="col-md-4">
-                        <label class="form-label">Department</label>
-                        <InputText class="form-control" @bind-Value="_newIndividual.Department" />
-                    </div>
+<!-- Filters -->
+<div class="card mb-3">
+    <div class="card-body py-2">
+        <div class="row g-2 align-items-end">
+            <div class="col-md-3">
+                <label class="form-label small">Search</label>
+                <input class="form-control form-control-sm" type="search" placeholder="Name, email/ID, service…" @bind="_search" @bind:event="oninput" />
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Sex</label>
+                <select class="form-select form-select-sm" @bind="_filterSex">
+                    <option value="">All</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Province</label>
+                <select class="form-select form-select-sm" @bind="_filterProvince">
+                    <option value="">All</option>
+                    @foreach (var p in _provinces)
+                    {
+                        <option value="@p">@p</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label small">Status</label>
+                <select class="form-select form-select-sm" @bind="_filterStatus">
+                    <option value="">All</option>
+                    <option value="Registered">Registered</option>
+                    <option value="Pending">Pending</option>
+                </select>
+            </div>
+            <div class="col-md-3 d-flex gap-2">
+                <button class="btn btn-outline-secondary btn-sm" @onclick="ResetIndividualFilters"><i class="bi bi-x-lg"></i> Reset</button>
+                <div class="dropdown">
+                    <button class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" @onclick:preventDefault>Columns</button>
+                    <ul class="dropdown-menu dropdown-menu-end p-2" style="min-width:200px;">
+                        @foreach (var col in AllIndividualColumns)
+                        {
+                            <li>
+                                <label class="dropdown-item d-flex align-items-center gap-2 mb-0">
+                                    <input type="checkbox" class="form-check-input"
+                                           checked="@_exportColumns.Contains(col.Key)"
+                                           @onchange="() => ToggleExportColumn(col.Key)" />
+                                    @col.Label
+                                </label>
+                            </li>
+                        }
+                        <li><hr class="dropdown-divider" /></li>
+                        <li>
+                            <button class="dropdown-item small" @onclick="SelectAllColumns">Select all</button>
+                        </li>
+                        <li>
+                            <button class="dropdown-item small" @onclick="() => _exportColumns.Clear()">Deselect all</button>
+                        </li>
+                    </ul>
                 </div>
-                @if (_formError is not null)
-                {
-                    <div class="alert alert-danger mt-3 mb-0">@_formError</div>
-                }
-                <div class="mt-3">
-                    <button type="submit" class="btn btn-primary" disabled="@_busy">Save</button>
-                    <button type="button" class="btn btn-secondary ms-2" @onclick="CancelAdd">Cancel</button>
-                </div>
-            </EditForm>
+                <button class="btn btn-outline-success btn-sm" @onclick='() => ExportAsync("xlsx")'>Export</button>
+                <label class="btn btn-outline-primary btn-sm mb-0">
+                    Import
+                    <InputFile class="d-none" OnChange="HandleImportFileSelected" accept=".xlsx,.csv" />
+                </label>
+                <button class="btn btn-primary btn-sm" @onclick="ShowShareModal">
+                    <i class="bi bi-qr-code"></i> Share
+                </button>
+            </div>
         </div>
+    </div>
+</div>
+
+@if (_importResult is not null)
+{
+    <div class="alert @(_importResult.Errors.Count > 0 ? "alert-warning" : "alert-success") alert-dismissible">
+        Imported @_importResult.Imported of @_importResult.TotalRows rows.
+        @(_importResult.Skipped > 0 ? $"Skipped {_importResult.Skipped} duplicates." : "")
+        @(_importResult.Errors.Count > 0 ? $"{_importResult.Errors.Count} validation error(s)." : "")
+        <button type="button" class="btn-close" @onclick="() => _importResult = null"></button>
     </div>
 }
 
@@ -60,22 +143,29 @@
     <table class="table table-striped table-hover">
         <thead>
             <tr>
+                <th>#</th>
                 <th>Name</th>
-                <th>Email / ID</th>
-                <th>Department</th>
-                <th>Status</th>
-                <th>Created</th>
+                <th>Sex</th>
+                <th>Age</th>
+                <th>Province</th>
+                <th>City / Municipality</th>
+                <th>Barangay</th>
+                <th>Sectors</th>
+                <th>Service Availed</th>
+                <th>Date</th>
                 <th class="text-end">Actions</th>
             </tr>
         </thead>
         <tbody>
             @if (_filtered.Count == 0)
             {
-                <tr><td colspan="6" class="text-muted">No individuals found.</td></tr>
+                <tr><td colspan="11" class="text-muted">No individuals found. Share the registration link to get started.</td></tr>
             }
             @foreach (var individual in _filtered)
             {
+                var sectors = ParseSectors(individual.Sectors);
                 <tr>
+                    <td>@individual.Id</td>
                     <td>
                         @if (_editingId == individual.Id)
                         {
@@ -89,45 +179,108 @@
                     <td>
                         @if (_editingId == individual.Id)
                         {
-                            <input class="form-control form-control-sm" @bind="_editEmail" />
+                            <select class="form-select form-select-sm" @bind="_editSex">
+                                <option value="">—</option>
+                                <option value="Male">Male</option>
+                                <option value="Female">Female</option>
+                                <option value="Other">Other</option>
+                            </select>
                         }
                         else
                         {
-                            @individual.EmailOrEmployeeId
+                            @(individual.Sex ?? "—")
                         }
                     </td>
                     <td>
                         @if (_editingId == individual.Id)
                         {
-                            <input class="form-control form-control-sm" @bind="_editDepartment" />
+                            <input type="number" class="form-control form-control-sm" @bind="_editAge" min="1" max="150" />
                         }
                         else
                         {
-                            @(individual.Department ?? "—")
+                            @(individual.Age?.ToString() ?? "—")
                         }
                     </td>
                     <td>
-                        @if (individual.Status == "Registered")
+                        @if (_editingId == individual.Id)
                         {
-                            <span class="badge text-bg-success status-badge">Registered</span>
+                            <input class="form-control form-control-sm" @bind="_editProvince" />
                         }
                         else
                         {
-                            <span class="badge text-bg-warning status-badge">Pending</span>
+                            @(individual.Province ?? "—")
                         }
                     </td>
-                    <td>@individual.CreatedAt.ToLocalTime().ToString("g")</td>
+                    <td>
+                        @if (_editingId == individual.Id)
+                        {
+                            <input class="form-control form-control-sm" @bind="_editCityMunicipality" />
+                        }
+                        else
+                        {
+                            @(individual.CityMunicipality ?? "—")
+                        }
+                    </td>
+                    <td>
+                        @if (_editingId == individual.Id)
+                        {
+                            <input class="form-control form-control-sm" @bind="_editBarangay" />
+                        }
+                        else
+                        {
+                            @(individual.Barangay ?? "—")
+                        }
+                    </td>
+                    <td>
+                        @if (_editingId == individual.Id)
+                        {
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var sector in AllSectors)
+                                {
+                                    <label class="sector-check mb-0">
+                                        <input type="checkbox" class="form-check-input"
+                                               checked="@_editSectorsSet.Contains(sector)"
+                                               @onchange="() => ToggleSector(sector)" />
+                                        <span class="small">@sector</span>
+                                    </label>
+                                }
+                            </div>
+                        }
+                        else if (sectors.Count > 0)
+                        {
+                            <div class="d-flex flex-wrap gap-1">
+                                @foreach (var sector in sectors)
+                                {
+                                    <span class="sector-badge">@sector</span>
+                                }
+                            </div>
+                        }
+                        else
+                        {
+                            <span class="text-muted">—</span>
+                        }
+                    </td>
+                    <td>
+                        @if (_editingId == individual.Id)
+                        {
+                            <input class="form-control form-control-sm" @bind="_editServiceAvailed" />
+                        }
+                        else
+                        {
+                            @(individual.ServiceAvailed ?? "—")
+                        }
+                    </td>
+                    <td>@individual.CreatedAt.ToLocalTime().ToString("d")</td>
                     <td class="text-end text-nowrap">
                         @if (_editingId == individual.Id)
                         {
-                            <button class="btn btn-sm btn-primary" @onclick="() => SaveEditAsync(individual.Id)">Save</button>
-                            <button class="btn btn-sm btn-secondary ms-1" @onclick="CancelEdit">Cancel</button>
+                            <button class="btn btn-sm btn-primary" title="Save" @onclick="() => SaveEditAsync(individual.Id)"><i class="bi bi-check-lg"></i></button>
+                            <button class="btn btn-sm btn-secondary ms-1" title="Cancel" @onclick="CancelEdit"><i class="bi bi-x-lg"></i></button>
                         }
                         else
                         {
-                            <button class="btn btn-sm btn-outline-primary" @onclick="() => ShowQrAsync(individual)">QR</button>
-                            <button class="btn btn-sm btn-outline-secondary ms-1" @onclick="() => StartEdit(individual)">Edit</button>
-                            <button class="btn btn-sm btn-outline-danger ms-1" @onclick="() => ConfirmDeleteAsync(individual)">Delete</button>
+                            <button class="btn btn-sm btn-outline-secondary ms-1" title="Edit" @onclick="() => StartEdit(individual)"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger ms-1" title="Delete" @onclick="() => ConfirmDeleteAsync(individual)"><i class="bi bi-trash"></i></button>
                         }
                     </td>
                 </tr>
@@ -136,42 +289,34 @@
     </table>
 </div>
 
-@if (_qrIndividual is not null)
+@if (_showShareModal)
 {
     <div class="modal d-block" tabindex="-1" role="dialog">
         <div class="modal-dialog modal-dialog-centered" role="document">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title">Registration QR — @_qrIndividual.FullName</h5>
-                    <button type="button" class="btn-close" @onclick="CloseQr"></button>
+                    <h5 class="modal-title">Share Registration Link</h5>
+                    <button type="button" class="btn-close" @onclick="CloseShareModal"></button>
                 </div>
                 <div class="modal-body text-center">
-                    @if (_qrToken is not null)
+                    <p class="text-muted mb-3">Share this link with individuals to let them register themselves.</p>
+                    @if (_shareQrBase64 is not null)
                     {
-                        @if (_qrToken.IsUsed)
-                        {
-                            <div class="alert alert-warning">This token has already been used. Regenerate to issue a new one.</div>
-                        }
-                        @if (!string.IsNullOrEmpty(_qrToken.QrCodePngBase64))
-                        {
-                            <img class="qr-code" src="data:image/png;base64,@_qrToken.QrCodePngBase64" alt="QR code" style="width:220px;height:220px;" />
-                            <div class="mt-2 text-muted small">@_qrToken.QrCodeUrl</div>
-                            <div class="mt-2 text-muted small">Expires: @_qrToken.ExpiresAt.ToLocalTime().ToString("g")</div>
-                            <button class="btn btn-primary mt-3" @onclick="() => PrintQrAsync()">Print</button>
-                        }
-                        else
-                        {
-                            <div class="text-muted">No QR available. Regenerate a token for this individual.</div>
-                        }
+                        <img class="qr-code" src="data:image/png;base64,@_shareQrBase64" alt="QR code" style="width:220px;height:220px;" />
                     }
-                    else
+                    <div class="mt-2 text-muted small" id="share-url-text">@_registrationUrl</div>
+                    <div class="mt-3 d-flex gap-2 justify-content-center">
+                        <button class="btn btn-primary" @onclick="PrintShareQrAsync">Print</button>
+                        <button class="btn btn-outline-secondary" @onclick="CopyShareLinkAsync">Copy Link</button>
+                        <button class="btn btn-outline-secondary" @onclick="ShareLinkAsync">Share</button>
+                    </div>
+                    @if (_copySuccess is not null)
                     {
-                        <div class="text-muted">No registration token yet.</div>
+                        <div class="text-success small mt-2">@_copySuccess</div>
                     }
                 </div>
                 <div class="modal-footer">
-                    <button class="btn btn-warning" @onclick="RegenerateTokenAsync">Regenerate token</button>
-                    <button class="btn btn-secondary" @onclick="CloseQr">Close</button>
+                    <button class="btn btn-secondary" @onclick="CloseShareModal">Close</button>
                 </div>
             </div>
         </div>
@@ -182,35 +327,114 @@
 @code {
     [Inject] private AdminApiClient Api { get; set; } = default!;
     [Inject] private IJSRuntime Js { get; set; } = default!;
+    [Inject] private IConfiguration Configuration { get; set; } = default!;
+    [Inject] private BrowserFileDownload Download { get; set; } = default!;
+    [Inject] private DeviceStatusListener Listener { get; set; } = default!;
+
+    private static readonly string[] AllSectors = new[]
+    {
+        "Student", "Government Workforce", "PWD", "LGBTQ",
+        "Sr. Citizens", "OSY", "Indigent", "Others"
+    };
+
+    private static readonly (string Key, string Label)[] AllIndividualColumns = new[]
+    {
+        ("FullName", "Full Name"),
+        ("EmailOrEmployeeId", "Email / Employee ID"),
+        ("Department", "Department"),
+        ("Sex", "Sex"),
+        ("Age", "Age"),
+        ("Province", "Province"),
+        ("CityMunicipality", "City / Municipality"),
+        ("Barangay", "Barangay"),
+        ("Student", "Student"),
+        ("Gov't", "Gov't"),
+        ("PWD", "PWD"),
+        ("LGBTQ", "LGBTQ"),
+        ("Sr. Citizens", "Sr. Citizens"),
+        ("OSY", "OSY"),
+        ("Indigent", "Indigent"),
+        ("Others", "Others"),
+        ("ServiceAvailed", "Service Availed"),
+        ("Status", "Status")
+    };
 
     private List<IndividualDto> _individuals = new();
     private string _search = string.Empty;
+    private string _filterSex = string.Empty;
+    private string _filterProvince = string.Empty;
+    private string _filterStatus = string.Empty;
     private string? _error;
-    private string? _formError;
     private bool _busy;
-    private bool _showAdd;
 
-    private AddIndividualModel _newIndividual = new();
+    private List<string> _provinces => _individuals
+        .Where(i => !string.IsNullOrWhiteSpace(i.Province))
+        .Select(i => i.Province!)
+        .Distinct()
+        .OrderBy(p => p)
+        .ToList();
 
     private int? _editingId;
     private string _editName = string.Empty;
     private string _editEmail = string.Empty;
     private string? _editDepartment;
+    private string? _editSex;
+    private int? _editAge;
+    private string? _editProvince;
+    private string? _editCityMunicipality;
+    private string? _editBarangay;
+    private HashSet<string> _editSectorsSet = new();
+    private string? _editServiceAvailed;
 
-    private IndividualDto? _qrIndividual;
-    private RegistrationTokenDto? _qrToken;
-    private string? _qrImageDataUrl;
+    private bool _showShareModal;
+    private string? _registrationUrl;
+    private string? _shareQrBase64;
+    private string? _copySuccess;
+    private ImportResult? _importResult;
+    private HashSet<string> _exportColumns = AllIndividualColumns.Select(c => c.Key).ToHashSet();
 
-    private List<IndividualDto> _filtered =>
-        string.IsNullOrWhiteSpace(_search)
-            ? _individuals
-            : _individuals.Where(i =>
-                i.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
-                i.EmailOrEmployeeId.Contains(_search, StringComparison.OrdinalIgnoreCase)).ToList();
+    private List<IndividualDto> _filtered
+    {
+        get
+        {
+            var query = _individuals.AsEnumerable();
+
+            if (!string.IsNullOrWhiteSpace(_search))
+            {
+                query = query.Where(i =>
+                    i.FullName.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    i.EmailOrEmployeeId.Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    (i.Province ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    (i.CityMunicipality ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    (i.Barangay ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase) ||
+                    (i.ServiceAvailed ?? "").Contains(_search, StringComparison.OrdinalIgnoreCase));
+            }
+
+            if (!string.IsNullOrWhiteSpace(_filterSex))
+                query = query.Where(i => i.Sex == _filterSex);
+
+            if (!string.IsNullOrWhiteSpace(_filterProvince))
+                query = query.Where(i => i.Province == _filterProvince);
+
+            if (!string.IsNullOrWhiteSpace(_filterStatus))
+                query = query.Where(i => i.Status == _filterStatus);
+
+            return query.ToList();
+        }
+    }
 
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        try
+        {
+            await Listener.EnsureStartedAsync();
+            Listener.IndividualChanged += HandleIndividualChanged;
+        }
+        catch
+        {
+            // SignalR is optional — the grid still works from the initial load + manual refresh.
+        }
     }
 
     private async Task LoadAsync()
@@ -226,50 +450,51 @@
         }
     }
 
-    private async Task AddIndividualAsync()
-    {
-        _busy = true;
-        _formError = null;
-        try
-        {
-            await Api.CreateIndividualAsync(_newIndividual.FullName.Trim(), _newIndividual.EmailOrEmployeeId.Trim(), _newIndividual.Department);
-            _showAdd = false;
-            _newIndividual = new AddIndividualModel();
-            await LoadAsync();
-        }
-        catch (KeyGateApiException ex)
-        {
-            _formError = ex.Message;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private void CancelAdd()
-    {
-        _showAdd = false;
-        _newIndividual = new AddIndividualModel();
-        _formError = null;
-    }
-
     private void StartEdit(IndividualDto individual)
     {
         _editingId = individual.Id;
         _editName = individual.FullName;
         _editEmail = individual.EmailOrEmployeeId;
         _editDepartment = individual.Department;
+        _editSex = individual.Sex;
+        _editAge = individual.Age;
+        _editProvince = individual.Province;
+        _editCityMunicipality = individual.CityMunicipality;
+        _editBarangay = individual.Barangay;
+        _editSectorsSet = ParseSectors(individual.Sectors).ToHashSet();
+        _editServiceAvailed = individual.ServiceAvailed;
     }
 
     private void CancelEdit() => _editingId = null;
+
+    private void ResetIndividualFilters()
+    {
+        _search = string.Empty;
+        _filterSex = string.Empty;
+        _filterProvince = string.Empty;
+        _filterStatus = string.Empty;
+    }
+
+    private void ToggleSector(string sector)
+    {
+        if (!_editSectorsSet.Remove(sector))
+        {
+            _editSectorsSet.Add(sector);
+        }
+    }
 
     private async Task SaveEditAsync(int id)
     {
         _busy = true;
         try
         {
-            await Api.UpdateIndividualAsync(id, _editName.Trim(), _editEmail.Trim(), _editDepartment);
+            var sectorsJson = _editSectorsSet.Count > 0
+                ? System.Text.Json.JsonSerializer.Serialize(_editSectorsSet.OrderBy(s => s))
+                : null;
+            await Api.UpdateIndividualAsync(
+                id, _editName.Trim(), _editEmail.Trim(), _editDepartment,
+                _editSex, _editAge, _editProvince, _editCityMunicipality,
+                _editBarangay, sectorsJson, _editServiceAvailed);
             _editingId = null;
             await LoadAsync();
         }
@@ -301,58 +526,164 @@
         }
     }
 
-    private async Task ShowQrAsync(IndividualDto individual)
+    private static List<string> ParseSectors(string? sectorsJson)
     {
-        _qrIndividual = individual;
-        _qrToken = individual.RegistrationToken;
-        _qrImageDataUrl = _qrToken?.QrCodePngBase64 is { } b64 ? $"data:image/png;base64,{b64}" : null;
-        await Task.CompletedTask;
-    }
-
-    private void CloseQr()
-    {
-        _qrIndividual = null;
-        _qrToken = null;
-        _qrImageDataUrl = null;
-    }
-
-    private async Task RegenerateTokenAsync()
-    {
-        if (_qrIndividual is null)
-        {
-            return;
-        }
-
+        if (string.IsNullOrWhiteSpace(sectorsJson))
+            return new();
         try
         {
-            var result = await Api.RegenerateTokenAsync(_qrIndividual.Id);
-            _qrIndividual = _qrIndividual with { Status = result.Status, RegistrationToken = result.RegistrationToken };
-            _qrToken = result.RegistrationToken;
-            _qrImageDataUrl = $"data:image/png;base64,{result.RegistrationToken.QrCodePngBase64}";
+            return System.Text.Json.JsonSerializer.Deserialize<List<string>>(sectorsJson) ?? new();
+        }
+        catch
+        {
+            return new();
+        }
+    }
+
+    private async Task ShowShareModal()
+    {
+        _registrationUrl = $"{Configuration["KeyGateApi:BaseUrl"]?.TrimEnd('/') ?? "http://localhost:5000"}/register";
+        _shareQrBase64 = await Api.GenerateQrPngBase64Async(_registrationUrl);
+        _showShareModal = true;
+    }
+
+    private void CloseShareModal()
+    {
+        _showShareModal = false;
+        _registrationUrl = null;
+        _shareQrBase64 = null;
+        _copySuccess = null;
+    }
+
+    private async Task PrintShareQrAsync()
+    {
+        if (_shareQrBase64 is not null)
+        {
+            try
+            {
+                await Js.InvokeVoidAsync("printQr", _shareQrBase64, "KeyGate Registration");
+            }
+            catch { }
+        }
+    }
+
+    private async Task CopyShareLinkAsync()
+    {
+        if (_registrationUrl is not null)
+        {
+            try
+            {
+                await Js.InvokeVoidAsync("navigator.clipboard.writeText", _registrationUrl);
+                _copySuccess = "Link copied!";
+                StateHasChanged();
+                await Task.Delay(2000);
+                _copySuccess = null;
+                StateHasChanged();
+            }
+            catch { }
+        }
+    }
+
+    private async Task ShareLinkAsync()
+    {
+        if (_registrationUrl is not null)
+        {
+            try
+            {
+                var shareSupported = await Js.InvokeAsync<bool>("eval", "typeof navigator.share === 'function'");
+                if (shareSupported)
+                {
+                    await Js.InvokeVoidAsync("navigator.share", new
+                    {
+                        title = "KeyGate Registration",
+                        text = "Complete your KeyGate registration",
+                        url = _registrationUrl
+                    });
+                }
+                else
+                {
+                    await Js.InvokeVoidAsync("navigator.clipboard.writeText", _registrationUrl);
+                    _copySuccess = "Link copied! (Share not supported on this browser)";
+                    StateHasChanged();
+                    await Task.Delay(2000);
+                    _copySuccess = null;
+                    StateHasChanged();
+                }
+            }
+            catch { }
+        }
+    }
+
+    private async Task ExportAsync(string format)
+    {
+        _busy = true;
+        try
+        {
+            var ext = format == "csv" ? "csv" : "xlsx";
+            var contentType = format == "csv" ? "text/csv" : "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet";
+            var columns = _exportColumns.Count < AllIndividualColumns.Length ? _exportColumns : null;
+            var bytes = await Api.ExportIndividualsAsync(ext, columns);
+            await Download.DownloadFileAsync($"individuals_{DateTime.UtcNow:yyyyMMdd}.{ext}", bytes, contentType);
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private void ToggleExportColumn(string key)
+    {
+        if (!_exportColumns.Remove(key))
+            _exportColumns.Add(key);
+    }
+
+    private void SelectAllColumns()
+    {
+        _exportColumns = AllIndividualColumns.Select(c => c.Key).ToHashSet();
+    }
+
+    private async Task HandleImportFileSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        _busy = true;
+        _error = null;
+        try
+        {
+            using var stream = file.OpenReadStream(maxAllowedSize: 10 * 1024 * 1024);
+            using var ms = new MemoryStream();
+            await stream.CopyToAsync(ms);
+            ms.Position = 0;
+            _importResult = await Api.ImportIndividualsAsync(ms, file.Name);
             await LoadAsync();
         }
         catch (KeyGateApiException ex)
         {
             _error = ex.Message;
         }
-    }
-
-    private async Task PrintQrAsync()
-    {
-        if (_qrImageDataUrl is not null && _qrIndividual is not null)
+        finally
         {
-            await Js.InvokeVoidAsync("printQr", _qrImageDataUrl, _qrIndividual.FullName);
+            _busy = false;
         }
     }
 
-    public class AddIndividualModel
+    private void HandleIndividualChanged(IndividualChangedEvent @event)
     {
-        [System.ComponentModel.DataAnnotations.Required]
-        public string FullName { get; set; } = string.Empty;
+        InvokeAsync(async () =>
+        {
+            await LoadAsync();
+            StateHasChanged();
+        });
+    }
 
-        [System.ComponentModel.DataAnnotations.Required]
-        public string EmailOrEmployeeId { get; set; } = string.Empty;
-
-        public string? Department { get; set; }
+    public async ValueTask DisposeAsync()
+    {
+        Listener.IndividualChanged -= HandleIndividualChanged;
+        await Listener.DisposeAsync();
     }
 }

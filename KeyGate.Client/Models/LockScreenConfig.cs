@@ -6,6 +6,8 @@ public class LockScreenConfig
     public string? BackgroundImageUrl { get; set; }
     public string? LogoUrl { get; set; }
     public string? Title { get; set; }
+    public string? Subtitle { get; set; }
+    public string? ScheduledLogoutTime { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string Source { get; set; } = "default";
 }

@@ -13,67 +13,72 @@ public class RegisterModel : PageModel
         _httpClientFactory = httpClientFactory;
     }
 
-    private sealed record RegistrationInfo(
-        string FullName,
-        string EmailOrEmployeeId,
-        string? Department,
-        DateTime ExpiresAt);
-
-    private sealed record CompleteResult(string AccessKey, string FullName, string EmailOrEmployeeId);
-
     public string? ErrorMessage { get; private set; }
-    public string? FullName { get; private set; }
-    public string? EmailOrEmployeeId { get; private set; }
-    public string? Department { get; private set; }
-    public DateTime? ExpiresAt { get; private set; }
+    public string? FullName { get; set; }
+    public string? EmailOrEmployeeId { get; set; }
+    public string? Department { get; set; }
+    public string? Sex { get; set; }
+    public int? Age { get; set; }
+    public string? Province { get; set; }
+    public string? CityMunicipality { get; set; }
+    public string? Barangay { get; set; }
+    public string? Sectors { get; set; }
+    public string? ServiceAvailed { get; set; }
     public string? AccessKey { get; private set; }
+    public bool ShowForm { get; private set; } = true;
 
-    public async Task<IActionResult> OnGetAsync(string token)
+    public void OnGet()
     {
-        if (!Guid.TryParse(token, out _))
-        {
-            ErrorMessage = "Invalid registration link.";
-            return Page();
-        }
-
-        using var client = CreateApiClient();
-        var response = await client.GetAsync($"/api/registration/{token}");
-
-        if (!response.IsSuccessStatusCode)
-        {
-            ErrorMessage = await ReadErrorAsync(response);
-            return Page();
-        }
-
-        var info = await response.Content.ReadFromJsonAsync<RegistrationInfo>();
-        if (info is null)
-        {
-            ErrorMessage = "Could not load your registration details.";
-            return Page();
-        }
-
-        FullName = info.FullName;
-        EmailOrEmployeeId = info.EmailOrEmployeeId;
-        Department = info.Department;
-        ExpiresAt = info.ExpiresAt;
-
-        return Page();
+        ShowForm = true;
     }
 
-    public async Task<IActionResult> OnPostAsync(string token)
+    public async Task<IActionResult> OnPostAsync()
     {
-        if (!Guid.TryParse(token, out _))
+        FullName = Request.Form["FullName"].ToString().Trim();
+        EmailOrEmployeeId = Request.Form["EmailOrEmployeeId"].ToString().Trim();
+        Department = Request.Form["Department"].ToString().Trim();
+        Sex = Request.Form["Sex"].ToString().Trim();
+        Province = Request.Form["Province"].ToString().Trim();
+        CityMunicipality = Request.Form["CityMunicipality"].ToString().Trim();
+        Barangay = Request.Form["Barangay"].ToString().Trim();
+        ServiceAvailed = Request.Form["ServiceAvailed"].ToString().Trim();
+
+        if (int.TryParse(Request.Form["Age"].ToString().Trim(), out var ageVal))
         {
-            ErrorMessage = "Invalid registration link.";
+            Age = ageVal;
+        }
+
+        var sectorValues = Request.Form["SectorValues"].ToList();
+        Sectors = sectorValues.Count > 0
+            ? JsonSerializer.Serialize(sectorValues)
+            : null;
+
+        if (string.IsNullOrWhiteSpace(FullName) || string.IsNullOrWhiteSpace(EmailOrEmployeeId))
+        {
+            ErrorMessage = "Full name and Email / Employee ID are required.";
+            ShowForm = true;
             return Page();
         }
 
         using var client = CreateApiClient();
-        var response = await client.PostAsync($"/api/registration/{token}/complete", content: null);
+        var response = await client.PostAsJsonAsync("/api/registration/self-register", new
+        {
+            FullName,
+            EmailOrEmployeeId,
+            Department,
+            Sex,
+            Age,
+            Province,
+            CityMunicipality,
+            Barangay,
+            Sectors,
+            ServiceAvailed
+        });
 
         if (!response.IsSuccessStatusCode)
         {
             ErrorMessage = await ReadErrorAsync(response);
+            ShowForm = true;
             return Page();
         }
 
@@ -81,13 +86,12 @@ public class RegisterModel : PageModel
         if (result is null)
         {
             ErrorMessage = "Could not complete your registration. Please try again.";
+            ShowForm = true;
             return Page();
         }
 
-        FullName = result.FullName;
-        EmailOrEmployeeId = result.EmailOrEmployeeId;
         AccessKey = result.AccessKey;
-
+        ShowForm = false;
         return Page();
     }
 
@@ -110,9 +114,10 @@ public class RegisterModel : PageModel
         }
         catch (JsonException)
         {
-            // fall through to generic message
         }
 
         return $"Registration failed ({(int)response.StatusCode}).";
     }
+
+    private sealed record CompleteResult(string AccessKey, string FullName, string EmailOrEmployeeId);
 }

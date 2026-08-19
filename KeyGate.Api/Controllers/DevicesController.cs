@@ -1,8 +1,10 @@
 using KeyGate.Api.Data;
 using KeyGate.Api.Entities;
+using KeyGate.Api.Hubs;
 using KeyGate.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace KeyGate.Api.Controllers;
@@ -13,11 +15,13 @@ public class DevicesController : ControllerBase
 {
     private readonly KeyGateDbContext _db;
     private readonly DeviceAuthService _deviceAuth;
+    private readonly IHubContext<DeviceStatusHub> _hub;
 
-    public DevicesController(KeyGateDbContext db, DeviceAuthService deviceAuth)
+    public DevicesController(KeyGateDbContext db, DeviceAuthService deviceAuth, IHubContext<DeviceStatusHub> hub)
     {
         _db = db;
         _deviceAuth = deviceAuth;
+        _hub = hub;
     }
 
     public record RegisterDeviceRequest(string DeviceName, string DeviceFingerprint, string? Location);
@@ -48,6 +52,7 @@ public class DevicesController : ControllerBase
         var device = await _db.Devices.SingleOrDefaultAsync(d => d.DeviceFingerprint == request.DeviceFingerprint);
 
         var apiKey = DeviceAuthService.IssueApiKey();
+        var isNew = device is null;
 
         if (device is null)
         {
@@ -71,6 +76,8 @@ public class DevicesController : ControllerBase
         }
 
         await _db.SaveChangesAsync();
+
+        await BroadcastDeviceChangedAsync(isNew ? "Created" : "Updated", device.Id, device.DeviceName, device.Status.ToString());
 
         return Ok(new RegisterDeviceResponse(device.Id, apiKey, device.DeviceName, device.Status.ToString()));
     }
@@ -137,6 +144,8 @@ public class DevicesController : ControllerBase
 
         await _db.SaveChangesAsync();
 
+        await BroadcastDeviceChangedAsync("Updated", device.Id, device.DeviceName, device.Status.ToString());
+
         var currentSession = await _db.Sessions
             .Where(s => s.DeviceId == device.Id && s.EndedAt == null)
             .OrderByDescending(s => s.StartedAt)
@@ -152,5 +161,17 @@ public class DevicesController : ControllerBase
             device.LastSeenAt,
             currentSession?.Id,
             currentSession?.FullName));
+    }
+
+    private async Task BroadcastDeviceChangedAsync(string action, int deviceId, string deviceName, string status)
+    {
+        var @event = new DeviceStatusHub.DeviceChangedEvent(
+            action,
+            deviceId,
+            deviceName,
+            status,
+            DateTime.UtcNow);
+
+        await _hub.Clients.All.SendAsync(DeviceStatusHub.DeviceChangedMethod, @event);
     }
 }

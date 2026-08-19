@@ -17,12 +17,14 @@ public class AuthController : ControllerBase
     private readonly KeyGateDbContext _db;
     private readonly KeyHashingService _hashing;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<AuthController> _logger;
 
-    public AuthController(KeyGateDbContext db, KeyHashingService hashing, IConfiguration configuration)
+    public AuthController(KeyGateDbContext db, KeyHashingService hashing, IConfiguration configuration, ILogger<AuthController> logger)
     {
         _db = db;
         _hashing = hashing;
         _configuration = configuration;
+        _logger = logger;
     }
 
     public record LoginRequest(string Email, string Password);
@@ -34,8 +36,15 @@ public class AuthController : ControllerBase
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
         var admin = await _db.Admins.SingleOrDefaultAsync(a => a.Email == request.Email);
-        if (admin is null || !_hashing.Verify(request.Password, admin.PasswordHash))
+        if (admin is null)
         {
+            _logger.LogWarning("Login failed: no admin found with email '{Email}'.", request.Email);
+            return Unauthorized(new { message = "Invalid email or password." });
+        }
+
+        if (!_hashing.Verify(request.Password, admin.PasswordHash))
+        {
+            _logger.LogWarning("Login failed: wrong password for admin '{Email}' (Id={Id}).", admin.Email, admin.Id);
             return Unauthorized(new { message = "Invalid email or password." });
         }
 

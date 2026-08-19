@@ -1,4 +1,5 @@
-﻿using KeyGate.Client.Views;
+﻿using KeyGate.Client.Services;
+using KeyGate.Client.Views;
 
 namespace KeyGate.Client
 {
@@ -31,7 +32,8 @@ namespace KeyGate.Client
         {
             KeyGate.Client.WinUI.StartupRegistration.EnsureEnabled();
 
-            if (sender is not Window window || window.Handler?.PlatformView is not Microsoft.UI.Xaml.Window nativeWindow)
+            if (sender is not Window window
+                || window.Handler?.PlatformView is not Microsoft.UI.Xaml.Window nativeWindow)
             {
                 return;
             }
@@ -41,6 +43,12 @@ namespace KeyGate.Client
             var appWindow = Microsoft.UI.Windowing.AppWindow.GetFromWindowId(windowId);
 
             appWindow.SetPresenter(Microsoft.UI.Windowing.AppWindowPresenterKind.FullScreen);
+
+            var windowManager = IWindowManager.Current;
+            if (windowManager is Platforms.Windows.WindowsWindowManager winManager)
+            {
+                winManager.SetAppWindow(appWindow, hwnd);
+            }
         }
 #endif
     }

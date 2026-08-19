@@ -49,24 +49,14 @@ public class AdminApiClient
             return;
         }
 
+        var bodyText = await response.Content.ReadAsStringAsync();
+
         if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
         {
             throw new KeyGateApiException("Your session has expired. Please sign in again.");
         }
 
-        string message = "Request failed.";
-        try
-        {
-            var body = await response.Content.ReadFromJsonAsync<JsonElement>();
-            if (body.TryGetProperty("message", out var prop) && prop.ValueKind == JsonValueKind.String)
-            {
-                message = prop.GetString() ?? message;
-            }
-        }
-        catch
-        {
-            // fall back to the generic message
-        }
+        string message = $"Request failed. ({(int)response.StatusCode} {response.StatusCode}) {bodyText}";
 
         throw new KeyGateApiException(message);
     }
@@ -98,10 +88,21 @@ public class AdminApiClient
         return await response.Content.ReadFromJsonAsync<IndividualDto>() ?? throw new KeyGateApiException("Could not read the API response.");
     }
 
-    public async Task<IndividualDto> UpdateIndividualAsync(int id, string fullName, string emailOrEmployeeId, string? department)
+    public async Task<IndividualDto> UpdateIndividualAsync(
+        int id,
+        string fullName,
+        string emailOrEmployeeId,
+        string? department,
+        string? sex,
+        int? age,
+        string? province,
+        string? cityMunicipality,
+        string? barangay,
+        string? sectors,
+        string? serviceAvailed)
     {
         var client = await CreateClientAsync();
-        var response = await client.PutAsJsonAsync($"/api/individuals/{id}", new UpdateIndividualRequest(fullName, emailOrEmployeeId, department));
+        var response = await client.PutAsJsonAsync($"/api/individuals/{id}", new UpdateIndividualRequest(fullName, emailOrEmployeeId, department, sex, age, province, cityMunicipality, barangay, sectors, serviceAvailed));
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<IndividualDto>() ?? throw new KeyGateApiException("Could not read the API response.");
     }
@@ -146,12 +147,21 @@ public class AdminApiClient
         return await response.Content.ReadFromJsonAsync<LockScreenConfigDto>() ?? throw new KeyGateApiException("Could not read the API response.");
     }
 
-    public async Task<LockScreenConfigDto> SaveLockScreenConfigAsync(int? deviceId, string? backgroundImageUrl, string? logoUrl, string? title)
+    public async Task<LockScreenConfigDto> SaveLockScreenConfigAsync(int? deviceId, string? backgroundImageUrl, string? logoUrl, string? title, string? subtitle, string? scheduledLogoutTime)
     {
         var client = await CreateClientAsync();
-        var response = await client.PostAsJsonAsync("/api/lockscreen-config", new SaveLockScreenConfigRequest(deviceId, backgroundImageUrl, logoUrl, title));
+        var response = await client.PostAsJsonAsync("/api/lockscreen-config", new SaveLockScreenConfigRequest(deviceId, backgroundImageUrl, logoUrl, title, subtitle, scheduledLogoutTime));
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<LockScreenConfigDto>() ?? throw new KeyGateApiException("Could not read the API response.");
+    }
+
+    public async Task<List<ConfigChangeLogDto>> GetConfigHistoryAsync(int? deviceId)
+    {
+        var client = await CreateClientAsync();
+        var url = deviceId is null ? "/api/lockscreen-config/history" : $"/api/lockscreen-config/history?deviceId={deviceId}";
+        var response = await client.GetAsync(url);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<List<ConfigChangeLogDto>>() ?? throw new KeyGateApiException("Could not read the API response.");
     }
 
     public async Task<string> UploadImageAsync(Stream fileStream, string fileName)
@@ -181,5 +191,104 @@ public class AdminApiClient
         var response = await client.GetAsync(url);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<List<SessionDto>>() ?? new();
+    }
+
+    public async Task<string> GenerateQrPngBase64Async(string payload)
+    {
+        var client = await CreateClientAsync();
+        var response = await client.PostAsJsonAsync("/api/registration/qr", new { url = payload });
+        await EnsureSuccessAsync(response);
+        var result = await response.Content.ReadFromJsonAsync<JsonElement>();
+        return result.GetProperty("qrCodePngBase64").GetString() ?? throw new KeyGateApiException("Could not generate QR code.");
+    }
+
+    public async Task<byte[]> ExportIndividualsAsync(string format, HashSet<string>? columns = null)
+    {
+        var client = await CreateClientAsync();
+        var url = $"/api/import-export/individuals?format={format}";
+        if (columns is not null && columns.Count > 0)
+            url += $"&columns={string.Join(",", columns)}";
+        var response = await client.GetAsync(url);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
+    public async Task<byte[]> ExportDevicesAsync(string format, HashSet<string>? columns = null)
+    {
+        var client = await CreateClientAsync();
+        var url = $"/api/import-export/devices?format={format}";
+        if (columns is not null && columns.Count > 0)
+            url += $"&columns={string.Join(",", columns)}";
+        var response = await client.GetAsync(url);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
+    public async Task<byte[]> ExportSessionsAsync(string format, HashSet<string>? columns = null)
+    {
+        var client = await CreateClientAsync();
+        var url = $"/api/import-export/sessions?format={format}";
+        if (columns is not null && columns.Count > 0)
+            url += $"&columns={string.Join(",", columns)}";
+        var response = await client.GetAsync(url);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadAsByteArrayAsync();
+    }
+
+    public async Task<ImportResult> ImportIndividualsAsync(Stream fileStream, string fileName)
+    {
+        var client = await CreateClientAsync();
+        using var content = new MultipartFormDataContent();
+        var fileContent = new StreamContent(fileStream);
+        content.Add(fileContent, "file", fileName);
+        var response = await client.PostAsync("/api/import-export/individuals", content);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<ImportResult>() ?? new ImportResult(0, 0, 0, new());
+    }
+
+    public async Task<ImportResult> ImportDevicesAsync(Stream fileStream, string fileName)
+    {
+        var client = await CreateClientAsync();
+        using var content = new MultipartFormDataContent();
+        var fileContent = new StreamContent(fileStream);
+        content.Add(fileContent, "file", fileName);
+        var response = await client.PostAsync("/api/import-export/devices", content);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<ImportResult>() ?? new ImportResult(0, 0, 0, new());
+    }
+
+    public async Task<AdminAccountDto> GetMyAccountAsync()
+    {
+        var client = await CreateClientAsync();
+        var response = await client.GetAsync("/api/admin/account");
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<AdminAccountDto>() ?? throw new KeyGateApiException("Could not read the API response.");
+    }
+
+    public async Task<AdminAccountDto> UpdateMyProfileAsync(string fullName, string email, string? phone, string? position)
+    {
+        var client = await CreateClientAsync();
+        var response = await client.PutAsJsonAsync("/api/admin/account", new UpdateAdminProfileRequest(fullName, email, phone, position));
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<AdminAccountDto>() ?? throw new KeyGateApiException("Could not read the API response.");
+    }
+
+    public async Task<string> UploadAvatarAsync(Stream fileStream, string fileName)
+    {
+        var client = await CreateClientAsync();
+        using var content = new MultipartFormDataContent();
+        var fileContent = new StreamContent(fileStream);
+        content.Add(fileContent, "file", fileName);
+        var response = await client.PostAsync("/api/admin/account/avatar", content);
+        await EnsureSuccessAsync(response);
+        var result = await response.Content.ReadFromJsonAsync<UploadImageResponse>();
+        return result?.Url ?? throw new KeyGateApiException("Could not read the API response.");
+    }
+
+    public async Task ChangePasswordAsync(string currentPassword, string newPassword)
+    {
+        var client = await CreateClientAsync();
+        var response = await client.PostAsJsonAsync("/api/admin/account/password", new ChangePasswordRequest(currentPassword, newPassword));
+        await EnsureSuccessAsync(response);
     }
 }

@@ -1,8 +1,10 @@
 using KeyGate.Api.Data;
 using KeyGate.Api.Entities;
+using KeyGate.Api.Hubs;
 using KeyGate.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace KeyGate.Api.Controllers;
@@ -16,21 +18,25 @@ public class LockScreenConfigController : ControllerBase
     private readonly KeyGateDbContext _db;
     private readonly DeviceAuthService _deviceAuth;
     private readonly IWebHostEnvironment _environment;
+    private readonly IHubContext<DeviceStatusHub> _hub;
 
-    public LockScreenConfigController(KeyGateDbContext db, DeviceAuthService deviceAuth, IWebHostEnvironment environment)
+    public LockScreenConfigController(KeyGateDbContext db, DeviceAuthService deviceAuth, IWebHostEnvironment environment, IHubContext<DeviceStatusHub> hub)
     {
         _db = db;
         _deviceAuth = deviceAuth;
         _environment = environment;
+        _hub = hub;
     }
 
-    public record SaveConfigRequest(int? DeviceId, string? BackgroundImageUrl, string? LogoUrl, string? Title);
+    public record SaveConfigRequest(int? DeviceId, string? BackgroundImageUrl, string? LogoUrl, string? Title, string? Subtitle, string? ScheduledLogoutTime);
 
     public record ConfigResponse(
         int? DeviceId,
         string? BackgroundImageUrl,
         string? LogoUrl,
         string? Title,
+        string? Subtitle,
+        string? ScheduledLogoutTime,
         DateTime UpdatedAt,
         string Source);
 
@@ -77,7 +83,7 @@ public class LockScreenConfigController : ControllerBase
 
         if (config is null)
         {
-            return Ok(new ConfigResponse(null, null, null, null, DateTime.MinValue, "default"));
+            return Ok(new ConfigResponse(null, null, null, null, null, null, DateTime.MinValue, "default"));
         }
 
         var source = config.DeviceId is null ? "global" : "device";
@@ -87,6 +93,8 @@ public class LockScreenConfigController : ControllerBase
             config.BackgroundImageUrl,
             config.LogoUrl,
             config.Title,
+            config.Subtitle,
+            config.ScheduledLogoutTime,
             config.UpdatedAt,
             source));
     }
@@ -110,20 +118,89 @@ public class LockScreenConfigController : ControllerBase
             _db.LockScreenConfigs.Add(config);
         }
 
+        var changedBy = User.Identity?.Name ?? "Admin";
+        var logs = new List<ConfigChangeLog>();
+
+        if (config.Title != request.Title)
+        {
+            logs.Add(new ConfigChangeLog { DeviceId = request.DeviceId, ChangedBy = changedBy, FieldChanged = "Title", OldValue = config.Title, NewValue = request.Title, ChangedAt = DateTime.UtcNow });
+        }
+        if (config.Subtitle != request.Subtitle)
+        {
+            logs.Add(new ConfigChangeLog { DeviceId = request.DeviceId, ChangedBy = changedBy, FieldChanged = "Subtitle", OldValue = config.Subtitle, NewValue = request.Subtitle, ChangedAt = DateTime.UtcNow });
+        }
+        if (config.BackgroundImageUrl != request.BackgroundImageUrl)
+        {
+            logs.Add(new ConfigChangeLog { DeviceId = request.DeviceId, ChangedBy = changedBy, FieldChanged = "BackgroundImage", OldValue = config.BackgroundImageUrl, NewValue = request.BackgroundImageUrl, ChangedAt = DateTime.UtcNow });
+        }
+        if (config.LogoUrl != request.LogoUrl)
+        {
+            logs.Add(new ConfigChangeLog { DeviceId = request.DeviceId, ChangedBy = changedBy, FieldChanged = "Logo", OldValue = config.LogoUrl, NewValue = request.LogoUrl, ChangedAt = DateTime.UtcNow });
+        }
+        if (config.ScheduledLogoutTime != request.ScheduledLogoutTime)
+        {
+            logs.Add(new ConfigChangeLog { DeviceId = request.DeviceId, ChangedBy = changedBy, FieldChanged = "ScheduledLogoutTime", OldValue = config.ScheduledLogoutTime, NewValue = request.ScheduledLogoutTime, ChangedAt = DateTime.UtcNow });
+        }
+
         config.BackgroundImageUrl = request.BackgroundImageUrl ?? config.BackgroundImageUrl;
         config.LogoUrl = request.LogoUrl ?? config.LogoUrl;
         config.Title = request.Title ?? config.Title;
+        config.Subtitle = request.Subtitle ?? config.Subtitle;
+        config.ScheduledLogoutTime = string.IsNullOrWhiteSpace(request.ScheduledLogoutTime) ? null : request.ScheduledLogoutTime;
         config.UpdatedAt = DateTime.UtcNow;
 
+        if (logs.Count > 0)
+        {
+            _db.ConfigChangeLogs.AddRange(logs);
+        }
+
+        var versionSetting = await _db.SystemSettings.SingleOrDefaultAsync(s => s.Key == "ConfigVersion");
+        if (versionSetting is not null)
+        {
+            versionSetting.Value = (int.Parse(versionSetting.Value) + 1).ToString();
+            versionSetting.UpdatedAt = DateTime.UtcNow;
+        }
+
         await _db.SaveChangesAsync();
+
+        await BroadcastConfigChangedAsync(request.DeviceId);
 
         return Ok(new ConfigResponse(
             config.DeviceId,
             config.BackgroundImageUrl,
             config.LogoUrl,
             config.Title,
+            config.Subtitle,
+            config.ScheduledLogoutTime,
             config.UpdatedAt,
             config.DeviceId is null ? "global" : "device"));
+    }
+
+    [HttpGet("version")]
+    public async Task<IActionResult> GetConfigVersion([FromQuery] int? deviceId)
+    {
+        var setting = await _db.SystemSettings.SingleOrDefaultAsync(s => s.Key == "ConfigVersion");
+        var version = setting is not null ? int.Parse(setting.Value) : 1;
+        return Ok(new { version });
+    }
+
+    [HttpGet("history")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetHistory([FromQuery] int? deviceId)
+    {
+        var query = _db.ConfigChangeLogs.AsQueryable();
+        if (deviceId is not null)
+            query = query.Where(l => l.DeviceId == deviceId);
+        else
+            query = query.Where(l => l.DeviceId == null);
+
+        var logs = await query
+            .OrderByDescending(l => l.ChangedAt)
+            .Take(50)
+            .Select(l => new { l.Id, l.DeviceId, l.ChangedBy, l.FieldChanged, l.OldValue, l.NewValue, l.ChangedAt })
+            .ToListAsync();
+
+        return Ok(logs);
     }
 
     [HttpPost("upload")]
@@ -156,5 +233,14 @@ public class LockScreenConfigController : ControllerBase
         var url = $"{Request.Scheme}://{Request.Host}/uploads/{fileName}";
 
         return Ok(new { url });
+    }
+
+    private async Task BroadcastConfigChangedAsync(int? deviceId)
+    {
+        var @event = new DeviceStatusHub.LockScreenConfigChangedEvent(
+            deviceId,
+            DateTime.UtcNow);
+
+        await _hub.Clients.All.SendAsync(DeviceStatusHub.LockScreenConfigChangedMethod, @event);
     }
 }

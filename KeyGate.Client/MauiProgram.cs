@@ -23,6 +23,16 @@ namespace KeyGate.Client
             builder.Services.AddSingleton<LocalCacheService>();
             builder.Services.AddSingleton<SessionMonitorService>();
             builder.Services.AddSingleton<ApiService>();
+
+#if WINDOWS
+            builder.Services.AddSingleton<SystemTrayService>();
+            builder.Services.AddSingleton<IWindowManager, Platforms.Windows.WindowsWindowManager>();
+            builder.Services.AddSingleton<IUserActivityMonitor, Platforms.Windows.WindowsUserActivityMonitor>();
+#else
+            builder.Services.AddSingleton<IWindowManager, StubWindowManager>();
+            builder.Services.AddSingleton<IUserActivityMonitor, StubUserActivityMonitor>();
+#endif
+
             builder.Services.AddSingleton<LockScreenViewModel>();
             builder.Services.AddSingleton<LockScreenPage>();
 

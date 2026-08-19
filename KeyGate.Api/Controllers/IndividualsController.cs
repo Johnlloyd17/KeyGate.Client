@@ -2,9 +2,11 @@ using System.Security.Claims;
 using System.IdentityModel.Tokens.Jwt;
 using KeyGate.Api.Data;
 using KeyGate.Api.Entities;
+using KeyGate.Api.Hubs;
 using KeyGate.Api.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
 
 namespace KeyGate.Api.Controllers;
@@ -17,17 +19,29 @@ public class IndividualsController : ControllerBase
     private readonly KeyGateDbContext _db;
     private readonly QrCodeService _qrCodeService;
     private readonly IConfiguration _configuration;
+    private readonly IHubContext<DeviceStatusHub> _hub;
 
-    public IndividualsController(KeyGateDbContext db, QrCodeService qrCodeService, IConfiguration configuration)
+    public IndividualsController(KeyGateDbContext db, QrCodeService qrCodeService, IConfiguration configuration, IHubContext<DeviceStatusHub> hub)
     {
         _db = db;
         _qrCodeService = qrCodeService;
         _configuration = configuration;
+        _hub = hub;
     }
 
     public record CreateIndividualRequest(string FullName, string EmailOrEmployeeId, string? Department);
 
-    public record UpdateIndividualRequest(string FullName, string EmailOrEmployeeId, string? Department);
+    public record UpdateIndividualRequest(
+        string FullName,
+        string EmailOrEmployeeId,
+        string? Department,
+        string? Sex,
+        int? Age,
+        string? Province,
+        string? CityMunicipality,
+        string? Barangay,
+        string? Sectors,
+        string? ServiceAvailed);
 
     public record RegistrationTokenDto(Guid Token, string QrCodeUrl, DateTime ExpiresAt, bool IsUsed, string? QrCodePngBase64);
 
@@ -36,6 +50,13 @@ public class IndividualsController : ControllerBase
         string FullName,
         string EmailOrEmployeeId,
         string? Department,
+        string? Sex,
+        int? Age,
+        string? Province,
+        string? CityMunicipality,
+        string? Barangay,
+        string? Sectors,
+        string? ServiceAvailed,
         string Status,
         DateTime CreatedAt,
         RegistrationTokenDto? RegistrationToken);
@@ -53,6 +74,13 @@ public class IndividualsController : ControllerBase
             i.FullName,
             i.EmailOrEmployeeId,
             i.Department,
+            i.Sex,
+            i.Age,
+            i.Province,
+            i.CityMunicipality,
+            i.Barangay,
+            i.Sectors,
+            i.ServiceAvailed,
             i.Status.ToString(),
             i.CreatedAt,
             i.RegistrationTokens
@@ -81,6 +109,13 @@ public class IndividualsController : ControllerBase
             individual.FullName,
             individual.EmailOrEmployeeId,
             individual.Department,
+            individual.Sex,
+            individual.Age,
+            individual.Province,
+            individual.CityMunicipality,
+            individual.Barangay,
+            individual.Sectors,
+            individual.ServiceAvailed,
             individual.Status.ToString(),
             individual.CreatedAt,
             individual.RegistrationTokens
@@ -97,7 +132,7 @@ public class IndividualsController : ControllerBase
             return Conflict(new { message = "An individual with that email/ID already exists." });
         }
 
-        var adminId = int.Parse(User.FindFirstValue(JwtRegisteredClaimNames.Sub)!);
+        var adminId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
 
         var individual = new Individual
         {
@@ -119,9 +154,18 @@ public class IndividualsController : ControllerBase
             individual.FullName,
             individual.EmailOrEmployeeId,
             individual.Department,
+            individual.Sex,
+            individual.Age,
+            individual.Province,
+            individual.CityMunicipality,
+            individual.Barangay,
+            individual.Sectors,
+            individual.ServiceAvailed,
             individual.Status.ToString(),
             individual.CreatedAt,
             ToTokenDto(token, includeQrCode: true));
+
+        await BroadcastIndividualChangedAsync("Created", individual.Id, individual.FullName, individual.Status);
 
         return CreatedAtAction(nameof(GetIndividual), new { id = individual.Id }, result);
     }
@@ -143,8 +187,17 @@ public class IndividualsController : ControllerBase
         individual.FullName = request.FullName;
         individual.EmailOrEmployeeId = request.EmailOrEmployeeId;
         individual.Department = request.Department;
+        individual.Sex = request.Sex;
+        individual.Age = request.Age;
+        individual.Province = request.Province;
+        individual.CityMunicipality = request.CityMunicipality;
+        individual.Barangay = request.Barangay;
+        individual.Sectors = request.Sectors;
+        individual.ServiceAvailed = request.ServiceAvailed;
 
         await _db.SaveChangesAsync();
+
+        await BroadcastIndividualChangedAsync("Updated", individual.Id, individual.FullName, individual.Status);
 
         var latestToken = await _db.RegistrationTokens
             .Where(t => t.IndividualId == id)
@@ -156,6 +209,13 @@ public class IndividualsController : ControllerBase
             individual.FullName,
             individual.EmailOrEmployeeId,
             individual.Department,
+            individual.Sex,
+            individual.Age,
+            individual.Province,
+            individual.CityMunicipality,
+            individual.Barangay,
+            individual.Sectors,
+            individual.ServiceAvailed,
             individual.Status.ToString(),
             individual.CreatedAt,
             latestToken is null ? null : ToTokenDto(latestToken, includeQrCode: false)));
@@ -177,6 +237,8 @@ public class IndividualsController : ControllerBase
 
         _db.Individuals.Remove(individual);
         await _db.SaveChangesAsync();
+
+        await BroadcastIndividualChangedAsync("Deleted", individual.Id, individual.FullName, individual.Status);
 
         return NoContent();
     }
@@ -241,5 +303,17 @@ public class IndividualsController : ControllerBase
             token.ExpiresAt,
             token.IsUsed,
             includeQrCode ? Convert.ToBase64String(_qrCodeService.GenerateQrCodePng(token.QrCodeUrl)) : null);
+    }
+
+    private async Task BroadcastIndividualChangedAsync(string action, int id, string fullName, IndividualStatus status)
+    {
+        var @event = new DeviceStatusHub.IndividualChangedEvent(
+            action,
+            id,
+            fullName,
+            status.ToString(),
+            DateTime.UtcNow);
+
+        await _hub.Clients.All.SendAsync(DeviceStatusHub.IndividualChangedMethod, @event);
     }
 }

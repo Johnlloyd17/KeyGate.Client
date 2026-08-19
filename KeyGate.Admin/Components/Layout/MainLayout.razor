@@ -6,19 +6,39 @@
     </div>
 
     <main>
-        <div class="top-row px-4 auth">
+        <div class="top-row px-4 auth d-flex align-items-center justify-content-end">
             <AuthorizeView>
                 <Authorized>
-                    <span class="me-3 text-secondary">Signed in as @context.User.Identity?.Name</span>
-                    <form method="post" action="/signout" class="m-0">
-                        <button type="submit" class="btn btn-outline-secondary btn-sm">Sign out</button>
-                    </form>
+                    <a href="/account" class="d-flex align-items-center gap-2 text-decoration-none" style="color:var(--kg-text-secondary);font-size:0.875rem;">
+                        @if (_account?.AvatarUrl is not null)
+                        {
+                            <img src="@_account.AvatarUrl" alt="Avatar"
+                                 style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--kg-border);" />
+                        }
+                        else
+                        {
+                            <div style="width:32px;height:32px;border-radius:50%;background:var(--kg-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:600;">
+                                @(_initials)
+                            </div>
+                        }
+                        <span>@context.User.Identity?.Name</span>
+                    </a>
                 </Authorized>
             </AuthorizeView>
         </div>
 
         <article class="content px-4">
-            @Body
+            <ErrorBoundary>
+                <ChildContent>
+                    @Body
+                </ChildContent>
+                <ErrorContent>
+                    <div class="alert alert-danger mt-3">
+                        <strong>Something went wrong.</strong>
+                        <p class="mb-1">An error occurred while rendering this page. Please <a href="/">reload</a> or navigate back.</p>
+                    </div>
+                </ErrorContent>
+            </ErrorBoundary>
         </article>
     </main>
 </div>
@@ -28,3 +48,29 @@
     <a href="." class="reload">Reload</a>
     <span class="dismiss">🗙</span>
 </div>
+
+@code {
+    [Inject] private AdminApiClient Api { get; set; } = default!;
+
+    private AdminAccountDto? _account;
+    private string _initials = "?";
+
+    protected override async Task OnInitializedAsync()
+    {
+        try
+        {
+            _account = await Api.GetMyAccountAsync();
+            if (!string.IsNullOrWhiteSpace(_account.FullName))
+            {
+                var parts = _account.FullName.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+                _initials = parts.Length >= 2
+                    ? $"{parts[0][0]}{parts[^1][0]}".ToUpper()
+                    : _account.FullName[..Math.Min(2, _account.FullName.Length)].ToUpper();
+            }
+        }
+        catch
+        {
+            // Profile load is optional — layout still works without it.
+        }
+    }
+}

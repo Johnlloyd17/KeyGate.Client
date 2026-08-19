@@ -1,114 +1,207 @@
 @page "/lockscreen"
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
+@implements IAsyncDisposable
 
 <PageTitle>Lock Screen — KeyGate Admin</PageTitle>
 
-<h1>Lock Screen</h1>
+<h1>Lock Screen Configuration</h1>
 
 @if (_error is not null)
 {
     <div class="alert alert-danger">@_error</div>
 }
 
-<div class="card mb-3">
-    <div class="card-body">
-        <div class="row g-3">
-            <div class="col-md-4">
-                <label class="form-label">Apply to</label>
-                <select class="form-select" @bind="_selectedDeviceId" @bind:after="OnDeviceChanged">
-                    <option value="">Global (all devices)</option>
-                    @foreach (var device in _devices)
+<!-- Z-pattern: Top-left = Heading + Device Selector | Center = Preview | Bottom-right = Save -->
+<div class="row g-3 mb-4">
+    <!-- Left: Settings + Device Info (col-lg-4) -->
+    <div class="col-lg-4">
+        <div class="card mb-3">
+            <div class="card-header">Settings</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label small">Apply to</label>
+                    <select class="form-select form-select-sm" @bind="_selectedDeviceId" @bind:after="OnDeviceChanged">
+                        <option value="">Global (all devices)</option>
+                        @foreach (var device in _devices)
+                        {
+                            <option value="@device.Id">@device.DeviceName</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Title</label>
+                    <input class="form-control form-control-sm" @bind="_title" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Subtitle / Message</label>
+                    <input class="form-control form-control-sm" @bind="_subtitle" placeholder="Enter your access key to unlock" />
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Auto-Logout Time</label>
+                    <input type="time" class="form-control form-control-sm" @bind="_scheduledLogoutTime" />
+                    <div class="form-text">Daily scheduled logout. Leave empty to disable.</div>
+                </div>
+
+                <div class="mb-3">
+                    <label class="form-label small">Background image</label>
+                    <InputFile OnChange="OnBackgroundUploadAsync" accept="image/*" class="form-control form-control-sm" />
+                    @if (_uploadingBackground)
                     {
-                        <option value="@device.Id">@device.DeviceName</option>
+                        <div class="text-muted small mt-1">Uploading…</div>
                     }
-                </select>
-            </div>
-            <div class="col-md-8">
-                <label class="form-label">Title</label>
-                <input class="form-control" @bind="_title" />
+                    @if (!string.IsNullOrEmpty(_backgroundImageUrl))
+                    {
+                        <div class="mt-2 d-flex align-items-start gap-2">
+                            <img src="@_backgroundImageUrl" alt="Background preview" class="border rounded" style="max-height:80px;" />
+                            <button class="btn btn-sm btn-outline-danger" @onclick="RemoveBackground">Remove</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-muted small mt-1">No background set.</div>
+                    }
+                </div>
+
+                <div class="mb-0">
+                    <label class="form-label small">Logo</label>
+                    <InputFile OnChange="OnLogoUploadAsync" accept="image/*" class="form-control form-control-sm" />
+                    @if (_uploadingLogo)
+                    {
+                        <div class="text-muted small mt-1">Uploading…</div>
+                    }
+                    @if (!string.IsNullOrEmpty(_logoUrl))
+                    {
+                        <div class="mt-2 d-flex align-items-start gap-2">
+                            <img src="@_logoUrl" alt="Logo preview" class="border rounded" style="max-height:60px;max-width:100px;" />
+                            <button class="btn btn-sm btn-outline-danger" @onclick="RemoveLogo">Remove</button>
+                        </div>
+                    }
+                    else
+                    {
+                        <div class="text-muted small mt-1">No logo set.</div>
+                    }
+                </div>
             </div>
         </div>
 
-        <div class="row g-3 mt-1">
-            <div class="col-md-6">
-                <label class="form-label">Background image</label>
-                <InputFile OnChange="OnBackgroundUploadAsync" accept="image/*" />
-                @if (_uploadingBackground)
-                {
-                    <div class="text-muted small mt-1">Uploading…</div>
-                }
-                @if (!string.IsNullOrEmpty(_backgroundImageUrl))
-                {
-                    <img src="@_backgroundImageUrl" alt="Background preview" class="mt-2 img-fluid border rounded" style="max-height:160px;" />
-                    <button class="btn btn-sm btn-outline-danger d-block mt-2" @onclick="RemoveBackground">Remove</button>
-                }
-                else
-                {
-                    <div class="text-muted small mt-1">No background set.</div>
-                }
+        @if (_selectedDevice is not null)
+        {
+            <div class="card">
+                <div class="card-header">Device Info</div>
+                <div class="card-body p-0">
+                    <table class="table table-sm mb-0">
+                        <tbody>
+                            <tr><th class="text-nowrap">Name</th><td>@_selectedDevice.DeviceName</td></tr>
+                            <tr><th class="text-nowrap">Status</th><td><span class="badge @(_selectedDevice.Status == "Online" ? "bg-success" : "bg-secondary")">@_selectedDevice.Status</span></td></tr>
+                            <tr><th class="text-nowrap">Location</th><td>@(_selectedDevice.Location ?? "—")</td></tr>
+                            <tr><th class="text-nowrap">Last seen</th><td>@_selectedDevice.LastSeenAt.ToLocalTime().ToString("g")</td></tr>
+                            <tr><th class="text-nowrap">Source</th><td><span class="badge bg-info">@(_config?.Source ?? "global")</span></td></tr>
+                        </tbody>
+                    </table>
+                </div>
             </div>
-            <div class="col-md-6">
-                <label class="form-label">Logo</label>
-                <InputFile OnChange="OnLogoUploadAsync" accept="image/*" />
-                @if (_uploadingLogo)
-                {
-                    <div class="text-muted small mt-1">Uploading…</div>
-                }
-                @if (!string.IsNullOrEmpty(_logoUrl))
-                {
-                    <img src="@_logoUrl" alt="Logo preview" class="mt-2 border rounded" style="max-height:120px;max-width:180px;" />
-                    <button class="btn btn-sm btn-outline-danger d-block mt-2" @onclick="RemoveLogo">Remove</button>
-                }
-                else
-                {
-                    <div class="text-muted small mt-1">No logo set.</div>
-                }
-            </div>
-        </div>
+        }
+    </div>
 
-        <div class="mt-3">
-            <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
-            <span class="text-muted small ms-2">
-                @if (_config is not null)
-                {
-                    <span>Last updated: @_config.UpdatedAt.ToLocalTime().ToString("g") (@_config.Source)</span>
-                }
-            </span>
+    <!-- Center/Right: Preview (col-lg-8) — Z-pattern diagonal center -->
+    <div class="col-lg-8">
+        <div class="card h-100">
+            <div class="card-header">Preview</div>
+            <div class="card-body p-0">
+                <div class="lock-screen-preview d-flex align-items-center justify-content-center flex-column">
+                    @if (!string.IsNullOrEmpty(_backgroundImageUrl))
+                    {
+                        <div class="preview-bg" style="background-image:url('@_backgroundImageUrl');"></div>
+                    }
+                    @if (!string.IsNullOrEmpty(_logoUrl))
+                    {
+                        <img src="@_logoUrl" alt="Logo" style="max-height:80px;max-width:200px;margin-bottom:12px;position:relative;" />
+                    }
+                    <h2 class="preview-title" style="font-size:1.5rem;font-weight:600;">@(string.IsNullOrWhiteSpace(_title) ? "KeyGate" : _title)</h2>
+                    @if (!string.IsNullOrWhiteSpace(_subtitle))
+                    {
+                        <p style="font-size:0.9rem;color:rgba(255,255,255,0.7);margin:0;position:relative;">@_subtitle</p>
+                    }
+                </div>
+            </div>
         </div>
     </div>
 </div>
 
+<!-- Z-pattern: Bottom-right = Save CTA -->
+<div class="d-flex align-items-center justify-content-end gap-3 mb-4">
+    @if (_config is not null)
+    {
+        <span class="text-muted small">Updated @_config.UpdatedAt.ToLocalTime().ToString("g")</span>
+    }
+    <button class="btn btn-primary" @onclick="SaveAsync" disabled="@_saving">Save</button>
+</div>
+
+<!-- History / Activity Log -->
 <div class="card">
-    <div class="card-header">Preview</div>
+    <div class="card-header d-flex justify-content-between align-items-center">
+        <span>Activity Log</span>
+        <button class="btn btn-sm btn-outline-secondary" @onclick="LoadHistoryAsync" disabled="@_loadingHistory">
+            @(_loadingHistory ? "Loading…" : "Refresh")
+        </button>
+    </div>
     <div class="card-body p-0">
-        <div class="lock-screen-preview d-flex align-items-center justify-content-center flex-column">
-            @if (!string.IsNullOrEmpty(_backgroundImageUrl))
-            {
-                <div class="preview-bg" style="background-image:url('@_backgroundImageUrl');"></div>
-            }
-            @if (!string.IsNullOrEmpty(_logoUrl))
-            {
-                <img src="@_logoUrl" alt="Logo" style="max-height:90px;max-width:200px;margin-bottom:12px;" />
-            }
-            <h2 class="preview-title">@(string.IsNullOrWhiteSpace(_title) ? "KeyGate" : _title)</h2>
-        </div>
+        @if (_history.Count == 0)
+        {
+            <p class="text-muted p-3 mb-0">No changes recorded yet.</p>
+        }
+        else
+        {
+            <table class="table table-sm table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Date &amp; Time</th>
+                        <th>Changed By</th>
+                        <th>Field</th>
+                        <th>Old Value</th>
+                        <th>New Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var log in _history)
+                    {
+                        <tr>
+                            <td>@log.ChangedAt.ToLocalTime().ToString("g")</td>
+                            <td>@(log.ChangedBy ?? "—")</td>
+                            <td><span class="badge bg-secondary">@log.FieldChanged</span></td>
+                            <td class="text-muted">@(log.OldValue ?? "—")</td>
+                            <td>@(log.NewValue ?? "—")</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        }
     </div>
 </div>
 
 @code {
     [Inject] private AdminApiClient Api { get; set; } = default!;
+    [Inject] private DeviceStatusListener Listener { get; set; } = default!;
 
     private List<DeviceDto> _devices = new();
     private string _selectedDeviceId = string.Empty;
     private string _title = string.Empty;
+    private string _subtitle = string.Empty;
     private string? _backgroundImageUrl;
     private string? _logoUrl;
+    private DateTime? _scheduledLogoutTime;
     private string? _error;
     private bool _saving;
     private bool _uploadingBackground;
     private bool _uploadingLogo;
     private LockScreenConfigDto? _config;
+    private DeviceDto? _selectedDevice;
+    private List<ConfigChangeLogDto> _history = new();
+    private bool _loadingHistory;
 
     protected override async Task OnInitializedAsync()
     {
@@ -116,10 +209,21 @@
         {
             _devices = await Api.GetDevicesAsync();
             await LoadConfigAsync();
+            await LoadHistoryAsync();
         }
         catch (KeyGateApiException ex)
         {
             _error = ex.Message;
+        }
+
+        try
+        {
+            await Listener.EnsureStartedAsync();
+            Listener.LockScreenConfigChanged += HandleConfigChanged;
+        }
+        catch
+        {
+            // SignalR is optional.
         }
     }
 
@@ -130,6 +234,7 @@
     {
         _error = null;
         await LoadConfigAsync();
+        await LoadHistoryAsync();
     }
 
     private async Task LoadConfigAsync()
@@ -138,12 +243,36 @@
         {
             _config = await Api.GetLockScreenConfigAsync(SelectedDeviceId);
             _title = _config.Title ?? string.Empty;
+            _subtitle = _config.Subtitle ?? string.Empty;
             _backgroundImageUrl = _config.BackgroundImageUrl;
             _logoUrl = _config.LogoUrl;
+            _scheduledLogoutTime = TimeOnly.TryParse(_config.ScheduledLogoutTime, out var t)
+                ? new DateTime(1, 1, 1, t.Hour, t.Minute, 0)
+                : null;
+            _selectedDevice = SelectedDeviceId.HasValue
+                ? _devices.FirstOrDefault(d => d.Id == SelectedDeviceId.Value)
+                : null;
         }
         catch (KeyGateApiException ex)
         {
             _error = ex.Message;
+        }
+    }
+
+    private async Task LoadHistoryAsync()
+    {
+        _loadingHistory = true;
+        try
+        {
+            _history = await Api.GetConfigHistoryAsync(SelectedDeviceId);
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _loadingHistory = false;
         }
     }
 
@@ -210,7 +339,16 @@
         _error = null;
         try
         {
-            _config = await Api.SaveLockScreenConfigAsync(SelectedDeviceId, _backgroundImageUrl, _logoUrl, _title);
+            _config = await Api.SaveLockScreenConfigAsync(
+                SelectedDeviceId,
+                _backgroundImageUrl,
+                _logoUrl,
+                _title,
+                _subtitle,
+                _scheduledLogoutTime.HasValue
+                    ? $"{_scheduledLogoutTime.Value.Hour:D2}:{_scheduledLogoutTime.Value.Minute:D2}"
+                    : null);
+            await LoadHistoryAsync();
         }
         catch (KeyGateApiException ex)
         {
@@ -220,5 +358,21 @@
         {
             _saving = false;
         }
+    }
+
+    private void HandleConfigChanged(LockScreenConfigChangedEvent @event)
+    {
+        InvokeAsync(async () =>
+        {
+            await LoadConfigAsync();
+            await LoadHistoryAsync();
+            StateHasChanged();
+        });
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        Listener.LockScreenConfigChanged -= HandleConfigChanged;
+        await Listener.DisposeAsync();
     }
 }

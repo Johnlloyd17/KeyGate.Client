@@ -1,5 +1,4 @@
 @inject NavigationManager Navigation
-@inject IHttpContextAccessor HttpContextAccessor
 
 <AuthorizeView>
     <Authorized>
@@ -18,15 +17,7 @@
 
     protected override void OnInitialized()
     {
-        if (HttpContextAccessor.HttpContext is { } httpContext)
-        {
-            var returnUrl = httpContext.Request.Path + httpContext.Request.QueryString;
-            httpContext.Response.Redirect($"/login?returnUrl={Uri.EscapeDataString(returnUrl)}");
-        }
-        else
-        {
-            var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
-            Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
-        }
+        var returnUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        Navigation.NavigateTo($"login?returnUrl={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
     }
 }

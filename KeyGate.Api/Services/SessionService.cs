@@ -97,6 +97,8 @@ public class SessionService
 
             await BroadcastStatusChangedAsync(device.Id, device.DeviceName, DeviceStatus.Unlocked, matchingKey.Individual.FullName);
 
+            await BroadcastSessionChangedAsync("Started", session.Id, matchingKey.IndividualId, matchingKey.Individual.FullName, device.Id, device.DeviceName, session.StartedAt, null);
+
             return new UnlockResult(true, UnlockFailureReason.None, null, session.Id, matchingKey.Individual.FullName);
         }
         catch (PostgresException ex) when (ex.SqlState == "40001")
@@ -132,6 +134,8 @@ public class SessionService
             await BroadcastStatusChangedAsync(session.Device.Id, session.Device.DeviceName, DeviceStatus.Locked, null);
         }
 
+        await BroadcastSessionChangedAsync("Ended", session.Id, session.IndividualId, session.Individual?.FullName ?? string.Empty, session.DeviceId, session.Device?.DeviceName ?? string.Empty, session.StartedAt, session.EndedAt);
+
         return session;
     }
 
@@ -145,5 +149,21 @@ public class SessionService
             DateTime.UtcNow);
 
         await _hub.Clients.All.SendAsync(DeviceStatusHub.DeviceStatusChangedMethod, @event);
+    }
+
+    private async Task BroadcastSessionChangedAsync(string action, int sessionId, int individualId, string individualName, int deviceId, string deviceName, DateTime startedAt, DateTime? endedAt)
+    {
+        var @event = new DeviceStatusHub.SessionChangedEvent(
+            action,
+            sessionId,
+            individualId,
+            individualName,
+            deviceId,
+            deviceName,
+            startedAt,
+            endedAt,
+            DateTime.UtcNow);
+
+        await _hub.Clients.All.SendAsync(DeviceStatusHub.SessionChangedMethod, @event);
     }
 }

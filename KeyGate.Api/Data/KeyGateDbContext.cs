@@ -16,7 +16,9 @@ public class KeyGateDbContext : DbContext
     public DbSet<AccessKey> AccessKeys => Set<AccessKey>();
     public DbSet<Device> Devices => Set<Device>();
     public DbSet<LockScreenConfig> LockScreenConfigs => Set<LockScreenConfig>();
+    public DbSet<ConfigChangeLog> ConfigChangeLogs => Set<ConfigChangeLog>();
     public DbSet<Session> Sessions => Set<Session>();
+    public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -90,6 +92,19 @@ public class KeyGateDbContext : DbContext
                 .OnDelete(DeleteBehavior.Cascade);
         });
 
+        modelBuilder.Entity<ConfigChangeLog>(entity =>
+        {
+            entity.HasKey(l => l.Id);
+            entity.Property(l => l.FieldChanged).IsRequired();
+            entity.Property(l => l.ChangedBy).HasMaxLength(200);
+
+            entity.HasOne(l => l.Device)
+                .WithMany(d => d.ConfigChangeLogs)
+                .HasForeignKey(l => l.DeviceId)
+                .IsRequired(false)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
         modelBuilder.Entity<Session>(entity =>
         {
             entity.HasKey(s => s.Id);
@@ -104,6 +119,22 @@ public class KeyGateDbContext : DbContext
                 .WithMany(d => d.Sessions)
                 .HasForeignKey(s => s.DeviceId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<SystemSetting>(entity =>
+        {
+            entity.HasKey(s => s.Id);
+            entity.HasIndex(s => s.Key).IsUnique();
+            entity.Property(s => s.Key).IsRequired().HasMaxLength(200);
+            entity.Property(s => s.Value).IsRequired();
+        });
+
+        modelBuilder.Entity<SystemSetting>().HasData(new SystemSetting
+        {
+            Id = 1,
+            Key = "ConfigVersion",
+            Value = "1",
+            UpdatedAt = new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc)
         });
     }
 }

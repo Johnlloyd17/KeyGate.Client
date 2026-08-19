@@ -8,6 +8,7 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Npgsql;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -23,6 +24,7 @@ builder.Services.AddScoped<KeyHashingService>();
 builder.Services.AddScoped<QrCodeService>();
 builder.Services.AddScoped<DeviceAuthService>();
 builder.Services.AddScoped<SessionService>();
+builder.Services.AddScoped<SpreadsheetService>();
 builder.Services.AddSignalR();
 
 builder.Services.AddRateLimiter(options =>
@@ -72,10 +74,53 @@ var app = builder.Build();
 
 using (var scope = app.Services.CreateScope())
 {
-    var db = scope.ServiceProvider.GetRequiredService<KeyGateDbContext>();
-    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
-    var hashing = scope.ServiceProvider.GetRequiredService<KeyHashingService>();
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var configuration = scope.ServiceProvider.GetRequiredService<IConfiguration>();
+    var connectionString = configuration.GetConnectionString("KeyGateDb");
+
+    try
+    {
+        var csBuilder = new NpgsqlConnectionStringBuilder(connectionString);
+        var databaseName = csBuilder.Database;
+
+        var masterCsBuilder = new NpgsqlConnectionStringBuilder(connectionString)
+        {
+            Database = "postgres"
+        };
+
+        await using (var conn = new NpgsqlConnection(masterCsBuilder.ConnectionString))
+        {
+            await conn.OpenAsync();
+            await using var cmd = conn.CreateCommand();
+            cmd.CommandText = $"SELECT 1 FROM pg_database WHERE datname = '{databaseName}'";
+            var exists = await cmd.ExecuteScalarAsync();
+            if (exists is null)
+            {
+                cmd.CommandText = $"CREATE DATABASE \"{databaseName}\"";
+                await cmd.ExecuteNonQueryAsync();
+                logger.LogInformation("Created database '{Database}'.", databaseName);
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to ensure database exists. Check your PostgreSQL connection string.");
+        throw;
+    }
+
+    var db = scope.ServiceProvider.GetRequiredService<KeyGateDbContext>();
+    var hashing = scope.ServiceProvider.GetRequiredService<KeyHashingService>();
+
+    try
+    {
+        db.Database.Migrate();
+        logger.LogInformation("Database migrations applied successfully.");
+    }
+    catch (Exception ex)
+    {
+        logger.LogError(ex, "Failed to apply database migrations.");
+        throw;
+    }
 
     var seedSection = configuration.GetSection("AdminSeed");
     if (seedSection.Exists())
@@ -95,10 +140,14 @@ using (var scope = app.Services.CreateScope())
                 db.SaveChanges();
                 logger.LogInformation("Seeded default admin '{Email}'.", seedSection["Email"]);
             }
+            else
+            {
+                logger.LogInformation("Admin '{Email}' already exists, skipping seed.", seedSection["Email"]);
+            }
         }
         catch (Exception ex)
         {
-            logger.LogWarning(ex, "Could not seed default admin. Is the database available? Run the EF migrations first (section 6.5).");
+            logger.LogWarning(ex, "Could not seed default admin.");
         }
     }
 }

@@ -17,11 +17,13 @@
 
 .top-row {
     min-height: 3.5rem;
-    background-color: rgba(0,0,0,0.4);
+    background-color: rgba(0, 0, 0, 0.2);
 }
 
 .navbar-brand {
-    font-size: 1.1rem;
+    font-size: 1rem;
+    font-weight: 600;
+    letter-spacing: -0.01em;
 }
 
 .bi {
@@ -32,6 +34,7 @@
     margin-right: 0.75rem;
     top: -1px;
     background-size: cover;
+    opacity: 0.8;
 }
 
 .bi-house-door-fill-nav-menu {
@@ -63,38 +66,44 @@
 }
 
 .nav-item {
-    font-size: 0.9rem;
-    padding-bottom: 0.5rem;
+    font-size: 0.875rem;
+    padding-bottom: 2px;
 }
 
     .nav-item:first-of-type {
-        padding-top: 1rem;
+        padding-top: var(--kg-space-4);
     }
 
     .nav-item:last-of-type {
-        padding-bottom: 1rem;
+        padding-bottom: var(--kg-space-4);
     }
 
     .nav-item ::deep .nav-link {
-        color: #d7d7d7;
+        color: rgba(255, 255, 255, 0.65);
         background: none;
         border: none;
-        border-radius: 4px;
-        height: 3rem;
+        border-radius: 6px;
+        height: 2.75rem;
         display: flex;
         align-items: center;
-        line-height: 3rem;
+        line-height: 2.75rem;
         width: 100%;
+        margin: 0 var(--kg-space-2);
+        transition: background-color 0.15s, color 0.15s;
     }
 
 .nav-item ::deep a.active {
-    background-color: rgba(255,255,255,0.37);
+    background-color: rgba(255, 255, 255, 0.12);
     color: white;
 }
 
 .nav-item ::deep .nav-link:hover {
-    background-color: rgba(255,255,255,0.1);
+    background-color: rgba(255, 255, 255, 0.08);
     color: white;
+}
+
+.nav-item ::deep .nav-link:hover .bi {
+    opacity: 1;
 }
 
 .nav-scrollable {
@@ -102,7 +111,8 @@
 }
 
 .navbar-toggler:checked ~ .nav-scrollable {
-    display: block;
+    display: flex;
+    flex-direction: column;
 }
 
 @media (min-width: 641px) {
@@ -111,10 +121,8 @@
     }
 
     .nav-scrollable {
-        /* Never collapse the sidebar for wide screens */
-        display: block;
-
-        /* Allow sidebar to scroll for tall menus */
+        display: flex;
+        flex-direction: column;
         height: calc(100vh - 3.5rem);
         overflow-y: auto;
     }

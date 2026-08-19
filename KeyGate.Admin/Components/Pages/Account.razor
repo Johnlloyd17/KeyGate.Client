@@ -1,0 +1,242 @@
+@page "/account"
+@attribute [Authorize(Roles = "Admin")]
+@rendermode InteractiveServer
+
+<PageTitle>Account — KeyGate Admin</PageTitle>
+
+<h1>My Account</h1>
+
+@if (_error is not null)
+{
+    <div class="alert alert-danger">@_error</div>
+}
+@if (_success is not null)
+{
+    <div class="alert alert-success">@_success</div>
+}
+
+<div class="row g-4">
+    <!-- Profile Card -->
+    <div class="col-lg-4 col-md-5">
+        <div class="card h-100">
+            <div class="card-header">Profile</div>
+            <div class="card-body text-center">
+                @if (!string.IsNullOrEmpty(_account?.AvatarUrl))
+                {
+                    <img src="@_account.AvatarUrl" alt="Avatar" class="rounded-circle mb-3" style="width:100px;height:100px;object-fit:cover;" />
+                }
+                else
+                {
+                    <div class="rounded-circle d-inline-flex align-items-center justify-content-center mb-3" style="width:100px;height:100px;background:var(--kg-primary);color:#fff;font-size:2rem;font-weight:600;">
+                        @(_account?.FullName?.Length > 0 ? _account.FullName[..1].ToUpper() : "?")
+                    </div>
+                }
+
+                <div class="mb-1 fw-semibold">@_account?.FullName</div>
+                <div class="text-muted small mb-1">@_account?.Email</div>
+                @if (!string.IsNullOrEmpty(_account?.Position))
+                {
+                    <div class="text-muted small mb-2">@_account.Position</div>
+                }
+                <div class="mb-3">
+                    <span class="badge bg-secondary">@_account?.Role</span>
+                </div>
+
+                <label class="btn btn-outline-primary btn-sm">
+                    Change Avatar
+                    <InputFile class="d-none" OnChange="OnAvatarSelected" accept="image/*" />
+                </label>
+                @if (_uploadingAvatar)
+                {
+                    <span class="text-muted small ms-2">Uploading…</span>
+                }
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Profile -->
+    <div class="col-lg-4 col-md-7">
+        <div class="card h-100">
+            <div class="card-header">Edit Profile</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Full Name</label>
+                    <input class="form-control" @bind="_editName" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Email</label>
+                    <input type="email" class="form-control" @bind="_editEmail" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Phone</label>
+                    <input class="form-control" @bind="_editPhone" placeholder="Optional" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Position</label>
+                    <input class="form-control" @bind="_editPosition" placeholder="Optional" />
+                </div>
+                <button class="btn btn-primary" @onclick="SaveProfileAsync" disabled="@_saving">
+                    @(_saving ? "Saving…" : "Save Changes")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password -->
+    <div class="col-lg-4 col-md-12">
+        <div class="card h-100">
+            <div class="card-header">Change Password</div>
+            <div class="card-body">
+                <div class="mb-3">
+                    <label class="form-label">Current Password</label>
+                    <input type="password" class="form-control" @bind="_currentPassword" />
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">New Password</label>
+                    <input type="password" class="form-control" @bind="_newPassword" />
+                    <div class="form-text">At least 6 characters.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">Confirm New Password</label>
+                    <input type="password" class="form-control" @bind="_confirmPassword" />
+                </div>
+                <button class="btn btn-warning" @onclick="ChangePasswordAsync" disabled="@_changingPassword">
+                    @(_changingPassword ? "Changing…" : "Change Password")
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Inject] private AdminApiClient Api { get; set; } = default!;
+    [Inject] private IJSRuntime Js { get; set; } = default!;
+
+    private AdminAccountDto? _account;
+    private string? _error;
+    private string? _success;
+
+    private string _editName = string.Empty;
+    private string _editEmail = string.Empty;
+    private string? _editPhone;
+    private string? _editPosition;
+    private bool _saving;
+
+    private string? _currentPassword;
+    private string? _newPassword;
+    private string? _confirmPassword;
+    private bool _changingPassword;
+
+    private bool _uploadingAvatar;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAccountAsync();
+    }
+
+    private async Task LoadAccountAsync()
+    {
+        try
+        {
+            _account = await Api.GetMyAccountAsync();
+            _editName = _account.FullName;
+            _editEmail = _account.Email;
+            _editPhone = _account.Phone;
+            _editPosition = _account.Position;
+            _error = null;
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        _saving = true;
+        _error = null;
+        _success = null;
+        try
+        {
+            _account = await Api.UpdateMyProfileAsync(_editName.Trim(), _editEmail.Trim(), _editPhone, _editPosition);
+            _success = "Profile updated successfully.";
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        _error = null;
+        _success = null;
+
+        if (string.IsNullOrWhiteSpace(_currentPassword) || string.IsNullOrWhiteSpace(_newPassword))
+        {
+            _error = "Please fill in both password fields.";
+            return;
+        }
+
+        if (_newPassword != _confirmPassword)
+        {
+            _error = "New password and confirmation do not match.";
+            return;
+        }
+
+        if (_newPassword.Length < 6)
+        {
+            _error = "New password must be at least 6 characters.";
+            return;
+        }
+
+        _changingPassword = true;
+        try
+        {
+            await Api.ChangePasswordAsync(_currentPassword, _newPassword);
+            _success = "Password changed successfully.";
+            _currentPassword = null;
+            _newPassword = null;
+            _confirmPassword = null;
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _changingPassword = false;
+        }
+    }
+
+    private async Task OnAvatarSelected(InputFileChangeEventArgs e)
+    {
+        var file = e.File;
+        if (file is null) return;
+
+        _uploadingAvatar = true;
+        _error = null;
+        try
+        {
+            await using var stream = file.OpenReadStream(5 * 1024 * 1024);
+            var url = await Api.UploadAvatarAsync(stream, file.Name);
+            if (_account is not null)
+            {
+                _account = _account with { AvatarUrl = url };
+            }
+            _success = "Avatar updated.";
+        }
+        catch (KeyGateApiException ex)
+        {
+            _error = ex.Message;
+        }
+        finally
+        {
+            _uploadingAvatar = false;
+        }
+    }
+}

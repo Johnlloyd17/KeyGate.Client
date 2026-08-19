@@ -17,5 +17,6 @@ public class Device
     public DateTime LastSeenAt { get; set; } = DateTime.UtcNow;
 
     public List<LockScreenConfig> LockScreenConfigs { get; set; } = new();
+    public List<ConfigChangeLog> ConfigChangeLogs { get; set; } = new();
     public List<Session> Sessions { get; set; } = new();
 }

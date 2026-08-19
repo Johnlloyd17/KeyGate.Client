@@ -68,6 +68,29 @@ public class ApiService
         return JsonSerializer.Deserialize<LockScreenConfig>(body, JsonOptions);
     }
 
+    public async Task<int> GetConfigVersionAsync(CancellationToken cancellationToken = default)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, "/api/lockscreen-config/version");
+            AddDeviceHeaders(request);
+
+            var response = await _http.SendAsync(request, cancellationToken);
+            if (!response.IsSuccessStatusCode)
+            {
+                return 0;
+            }
+
+            var body = await response.Content.ReadAsStringAsync(cancellationToken);
+            using var doc = JsonDocument.Parse(body);
+            return doc.RootElement.GetProperty("version").GetInt32();
+        }
+        catch
+        {
+            return 0;
+        }
+    }
+
     public async Task<(SessionInfo? Session, string? Error)> UnlockAsync(string key, CancellationToken cancellationToken = default)
     {
         var deviceId = _identity.GetDeviceId()

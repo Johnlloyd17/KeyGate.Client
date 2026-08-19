@@ -11,6 +11,8 @@ public class CachedLockScreenConfig
     public string? BackgroundImageUrl { get; set; }
     public string? LogoUrl { get; set; }
     public string? Title { get; set; }
+    public string? Subtitle { get; set; }
+    public string? ScheduledLogoutTime { get; set; }
     public DateTime UpdatedAt { get; set; }
     public string Source { get; set; } = "default";
 }
@@ -37,6 +39,8 @@ public class LocalCacheService : IDisposable
                 BackgroundImageUrl = config.BackgroundImageUrl,
                 LogoUrl = config.LogoUrl,
                 Title = config.Title,
+                Subtitle = config.Subtitle,
+                ScheduledLogoutTime = config.ScheduledLogoutTime,
                 UpdatedAt = config.UpdatedAt,
                 Source = config.Source
             };
@@ -65,6 +69,8 @@ public class LocalCacheService : IDisposable
                 BackgroundImageUrl = cached.BackgroundImageUrl,
                 LogoUrl = cached.LogoUrl,
                 Title = cached.Title,
+                Subtitle = cached.Subtitle,
+                ScheduledLogoutTime = cached.ScheduledLogoutTime,
                 UpdatedAt = cached.UpdatedAt,
                 Source = cached.Source
             };

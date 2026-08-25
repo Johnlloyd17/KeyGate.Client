@@ -1,7 +1,7 @@
 @page "/devices"
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
-@implements IAsyncDisposable
+
 
 <PageTitle>Devices — KeyGate Admin</PageTitle>
 
@@ -12,6 +12,41 @@
     <div class="alert alert-danger">@_error</div>
 }
 
+@if (_loading)
+{
+    <div class="row mb-4">
+        @for (var i = 0; i < 4; i++)
+        {
+            <div class="col-md-3 col-6">
+                <div class="card h-100 placeholder-glow">
+                    <div class="card-body">
+                        <div class="placeholder placeholder-sm col-6 mb-2" style="height:0.75rem;"></div>
+                        <div class="placeholder placeholder-lg col-4 mb-2" style="height:1.75rem;"></div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+    <div class="card mb-3 placeholder-glow">
+        <div class="card-body py-2">
+            <div class="row g-2">
+                <div class="col-md-4"><div class="placeholder placeholder-sm col-12" style="height:2rem;"></div></div>
+                <div class="col-md-2"><div class="placeholder placeholder-sm col-12" style="height:2rem;"></div></div>
+                <div class="col-md-2"><div class="placeholder placeholder-sm col-12" style="height:2rem;"></div></div>
+            </div>
+        </div>
+    </div>
+    <div class="card placeholder-glow">
+        <div class="card-body">
+            @for (var r = 0; r < 6; r++)
+            {
+                <div class="placeholder placeholder-sm col-12 mb-2" style="height:1.5rem;"></div>
+            }
+        </div>
+    </div>
+}
+else
+{
 <!-- Metric Cards -->
 <div class="row mb-4">
     <div class="col-md-3 col-6">
@@ -187,6 +222,7 @@
         </tbody>
     </table>
 </div>
+}
 
 @code {
     [Inject] private AdminApiClient Api { get; set; } = default!;
@@ -211,6 +247,7 @@
     private string? _editLocation;
     private ImportResult? _importResult;
     private HashSet<string> _exportColumns = AllDeviceColumns.Select(c => c.Key).ToHashSet();
+    private bool _loading = true;
 
     private List<DeviceDto> _filtered
     {
@@ -241,6 +278,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        _loading = false;
         try
         {
             await Listener.EnsureStartedAsync();
@@ -377,9 +415,4 @@
         }
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        Listener.DeviceStatusChanged -= HandleDeviceStatusChanged;
-        await Listener.DisposeAsync();
-    }
 }

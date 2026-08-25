@@ -65,9 +65,18 @@ public class IndividualsController : ControllerBase
     public async Task<IActionResult> GetIndividuals()
     {
         var individuals = await _db.Individuals
-            .Include(i => i.RegistrationTokens)
             .OrderByDescending(i => i.CreatedAt)
             .ToListAsync();
+
+        var individualIds = individuals.Select(i => i.Id).ToList();
+
+        var latestTokens = await _db.RegistrationTokens
+            .Where(t => individualIds.Contains(t.IndividualId))
+            .GroupBy(t => t.IndividualId)
+            .Select(g => g.OrderByDescending(t => t.CreatedAt).First())
+            .ToListAsync();
+
+        var tokenLookup = latestTokens.ToDictionary(t => t.IndividualId, t => t);
 
         var result = individuals.Select(i => new IndividualDto(
             i.Id,
@@ -83,13 +92,21 @@ public class IndividualsController : ControllerBase
             i.ServiceAvailed,
             i.Status.ToString(),
             i.CreatedAt,
-            i.RegistrationTokens
-                .OrderByDescending(t => t.CreatedAt)
-                .Select(t => ToTokenDto(t, includeQrCode: false))
-                .FirstOrDefault()))
+            tokenLookup.TryGetValue(i.Id, out var token) ? ToTokenDto(token, includeQrCode: false) : null))
             .ToList();
 
         return Ok(result);
+    }
+
+    [HttpGet("dropdown")]
+    public async Task<IActionResult> GetIndividualsDropdown()
+    {
+        var items = await _db.Individuals
+            .OrderBy(i => i.FullName)
+            .Select(i => new { i.Id, i.FullName })
+            .ToListAsync();
+
+        return Ok(items);
     }
 
     [HttpGet("{id:int}")]

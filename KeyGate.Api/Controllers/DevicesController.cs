@@ -123,6 +123,18 @@ public class DevicesController : ControllerBase
         return Ok(result);
     }
 
+    [HttpGet("dropdown")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetDevicesDropdown()
+    {
+        var items = await _db.Devices
+            .OrderBy(d => d.DeviceName)
+            .Select(d => new { d.Id, d.DeviceName })
+            .ToListAsync();
+
+        return Ok(items);
+    }
+
     [HttpPut("{id:int}")]
     [Authorize(Roles = "Admin")]
     public async Task<IActionResult> UpdateDevice(int id, [FromBody] UpdateDeviceRequest request)

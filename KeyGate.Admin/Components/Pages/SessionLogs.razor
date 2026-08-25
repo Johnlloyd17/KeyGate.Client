@@ -1,7 +1,6 @@
 @page "/sessions"
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
-@implements IAsyncDisposable
 
 <PageTitle>Sessions — KeyGate Admin</PageTitle>
 
@@ -12,6 +11,25 @@
     <div class="alert alert-danger">@_error</div>
 }
 
+@if (_loading)
+{
+    <div class="row mb-4">
+        @for (var i = 0; i < 4; i++)
+        {
+            <div class="col-md-3 col-6">
+                <div class="card h-100 placeholder-glow">
+                    <div class="card-body">
+                        <div class="placeholder placeholder-sm col-6 mb-2" style="height:0.75rem;"></div>
+                        <div class="placeholder placeholder-lg col-4 mb-2" style="height:1.75rem;"></div>
+                        <div class="placeholder placeholder-sm col-8" style="height:0.75rem;"></div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
 <!-- Metric Cards -->
 <div class="row mb-4">
     <div class="col-md-3 col-6">
@@ -58,9 +76,9 @@
                 <label class="form-label small">Individual</label>
                 <select class="form-select form-select-sm" @bind="_selectedIndividualId">
                     <option value="">All</option>
-                    @foreach (var individual in _individuals)
+                    @foreach (var individual in _individualDropdown)
                     {
-                        <option value="@individual.Id">@individual.FullName</option>
+                        <option value="@individual.Id">@individual.Name</option>
                     }
                 </select>
             </div>
@@ -68,9 +86,9 @@
                 <label class="form-label small">Device</label>
                 <select class="form-select form-select-sm" @bind="_selectedDeviceId">
                     <option value="">All</option>
-                    @foreach (var device in _devices)
+                    @foreach (var device in _deviceDropdown)
                     {
-                        <option value="@device.Id">@device.DeviceName</option>
+                        <option value="@device.Id">@device.Name</option>
                     }
                 </select>
             </div>
@@ -169,6 +187,7 @@
         </tbody>
     </table>
 </div>
+}
 
 @code {
     [Inject] private AdminApiClient Api { get; set; } = default!;
@@ -186,11 +205,12 @@
         ("EndReason", "End Reason")
     };
 
-    private List<IndividualDto> _individuals = new();
-    private List<DeviceDto> _devices = new();
+    private List<DropdownItem> _individualDropdown = new();
+    private List<DropdownItem> _deviceDropdown = new();
     private List<SessionDto> _sessions = new();
     private string? _error;
     private bool _busy;
+    private bool _loading = true;
     private double _avgDuration;
     private HashSet<string> _exportColumns = AllSessionColumns.Select(c => c.Key).ToHashSet();
 
@@ -209,14 +229,17 @@
     {
         try
         {
-            _individuals = await Api.GetIndividualsAsync();
-            _devices = await Api.GetDevicesAsync();
-            await ApplyFiltersAsync();
+            var dropdownsTask = LoadDropdownsAsync();
+            var sessionsTask = LoadSessionsAsync();
+
+            await Task.WhenAll(dropdownsTask, sessionsTask);
         }
         catch (KeyGateApiException ex)
         {
             _error = ex.Message;
         }
+
+        _loading = false;
 
         try
         {
@@ -229,19 +252,35 @@
         }
     }
 
+    private async Task LoadDropdownsAsync()
+    {
+        var individualsTask = Api.GetIndividualsDropdownAsync();
+        var devicesTask = Api.GetDevicesDropdownAsync();
+
+        await Task.WhenAll(individualsTask, devicesTask);
+
+        _individualDropdown = await individualsTask;
+        _deviceDropdown = await devicesTask;
+    }
+
+    private async Task LoadSessionsAsync()
+    {
+        var from = _fromDate.HasValue ? _fromDate.Value.ToUniversalTime() : (DateTime?)null;
+        var to = _toDate.HasValue ? _toDate.Value.Date.AddDays(1).AddTicks(-1).ToUniversalTime() : (DateTime?)null;
+
+        _sessions = await Api.GetSessionsAsync(SelectedIndividualId, SelectedDeviceId, from, to);
+
+        var completed = _sessions.Where(s => s.DurationSeconds.HasValue).ToList();
+        _avgDuration = completed.Count > 0 ? completed.Average(s => s.DurationSeconds!.Value) : 0;
+    }
+
     private async Task ApplyFiltersAsync()
     {
         _busy = true;
         _error = null;
         try
         {
-            var from = _fromDate.HasValue ? _fromDate.Value.ToUniversalTime() : (DateTime?)null;
-            var to = _toDate.HasValue ? _toDate.Value.Date.AddDays(1).ToUniversalTime() : (DateTime?)null;
-
-            _sessions = await Api.GetSessionsAsync(SelectedIndividualId, SelectedDeviceId, from, to);
-
-            var completed = _sessions.Where(s => s.DurationSeconds.HasValue).ToList();
-            _avgDuration = completed.Count > 0 ? completed.Average(s => s.DurationSeconds!.Value) : 0;
+            await LoadSessionsAsync();
         }
         catch (KeyGateApiException ex)
         {
@@ -312,9 +351,4 @@
         });
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        Listener.SessionChanged -= HandleSessionChanged;
-        await Listener.DisposeAsync();
-    }
 }

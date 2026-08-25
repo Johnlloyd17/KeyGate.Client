@@ -156,3 +156,5 @@ public record UpdateAdminProfileRequest(
 public record ChangePasswordRequest(
     string CurrentPassword,
     string NewPassword);
+
+public record DropdownItem(int Id, string Name);

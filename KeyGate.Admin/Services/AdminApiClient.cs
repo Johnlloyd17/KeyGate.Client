@@ -18,6 +18,7 @@ public class AdminApiClient
 
     private readonly IHttpClientFactory _httpClientFactory;
     private readonly AuthenticationStateProvider _authStateProvider;
+    private string? _cachedJwt;
 
     public AdminApiClient(IHttpClientFactory httpClientFactory, AuthenticationStateProvider authStateProvider)
     {
@@ -27,8 +28,14 @@ public class AdminApiClient
 
     public async Task<string?> GetJwtAsync()
     {
+        if (_cachedJwt is not null)
+        {
+            return _cachedJwt;
+        }
+
         var state = await _authStateProvider.GetAuthenticationStateAsync();
-        return state.User.FindFirstValue(JwtClaimType);
+        _cachedJwt = state.User.FindFirstValue(JwtClaimType);
+        return _cachedJwt;
     }
 
     private async Task<HttpClient> CreateClientAsync()
@@ -80,6 +87,14 @@ public class AdminApiClient
         return await response.Content.ReadFromJsonAsync<List<IndividualDto>>() ?? new();
     }
 
+    public async Task<List<DropdownItem>> GetIndividualsDropdownAsync()
+    {
+        var client = await CreateClientAsync();
+        var response = await client.GetAsync("/api/individuals/dropdown");
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<List<DropdownItem>>() ?? new();
+    }
+
     public async Task<IndividualDto> CreateIndividualAsync(string fullName, string emailOrEmployeeId, string? department)
     {
         var client = await CreateClientAsync();
@@ -128,6 +143,14 @@ public class AdminApiClient
         var response = await client.GetAsync("/api/devices");
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<List<DeviceDto>>() ?? new();
+    }
+
+    public async Task<List<DropdownItem>> GetDevicesDropdownAsync()
+    {
+        var client = await CreateClientAsync();
+        var response = await client.GetAsync("/api/devices/dropdown");
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<List<DropdownItem>>() ?? new();
     }
 
     public async Task<DeviceDto> UpdateDeviceAsync(int id, string? deviceName, string? location)
@@ -191,6 +214,19 @@ public class AdminApiClient
         var response = await client.GetAsync(url);
         await EnsureSuccessAsync(response);
         return await response.Content.ReadFromJsonAsync<List<SessionDto>>() ?? new();
+    }
+
+    public async Task<JsonElement> GetDashboardSummaryAsync(DateTime? from = null, DateTime? to = null)
+    {
+        var client = await CreateClientAsync();
+        var query = new List<string>();
+        if (from is not null) query.Add($"from={Uri.EscapeDataString(from.Value.ToString("O"))}");
+        if (to is not null) query.Add($"to={Uri.EscapeDataString(to.Value.ToString("O"))}");
+        var url = query.Count > 0 ? $"/api/dashboard/summary?{string.Join("&", query)}" : "/api/dashboard/summary";
+
+        var response = await client.GetAsync(url);
+        await EnsureSuccessAsync(response);
+        return await response.Content.ReadFromJsonAsync<JsonElement>();
     }
 
     public async Task<string> GenerateQrPngBase64Async(string payload)

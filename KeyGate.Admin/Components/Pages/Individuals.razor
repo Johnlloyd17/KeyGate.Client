@@ -1,7 +1,7 @@
 @page "/individuals"
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
-@implements IAsyncDisposable
+
 
 <style>
     main {
@@ -19,6 +19,42 @@
     <div class="alert alert-danger">@_error</div>
 }
 
+@if (_loading)
+{
+    <div class="row mb-4">
+        @for (var i = 0; i < 4; i++)
+        {
+            <div class="col-md-3 col-6">
+                <div class="card h-100 placeholder-glow">
+                    <div class="card-body">
+                        <div class="placeholder placeholder-sm col-6 mb-2" style="height:0.75rem;"></div>
+                        <div class="placeholder placeholder-lg col-4 mb-2" style="height:1.75rem;"></div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+    <div class="card mb-3 placeholder-glow">
+        <div class="card-body py-2">
+            <div class="row g-2">
+                <div class="col-md-3"><div class="placeholder placeholder-sm col-12" style="height:2rem;"></div></div>
+                <div class="col-md-2"><div class="placeholder placeholder-sm col-12" style="height:2rem;"></div></div>
+                <div class="col-md-2"><div class="placeholder placeholder-sm col-12" style="height:2rem;"></div></div>
+                <div class="col-md-2"><div class="placeholder placeholder-sm col-12" style="height:2rem;"></div></div>
+            </div>
+        </div>
+    </div>
+    <div class="card placeholder-glow">
+        <div class="card-body">
+            @for (var r = 0; r < 6; r++)
+            {
+                <div class="placeholder placeholder-sm col-12 mb-2" style="height:1.5rem;"></div>
+            }
+        </div>
+    </div>
+}
+else
+{
 <!-- Metric Cards -->
 <div class="row mb-4">
     <div class="col-md-3 col-6">
@@ -116,12 +152,12 @@
                         </li>
                     </ul>
                 </div>
-                <button class="btn btn-outline-success btn-sm" @onclick='() => ExportAsync("xlsx")'>Export</button>
+                <button class="btn btn-outline-success btn-sm" @onclick='() => ExportAsync("xlsx")' disabled="@_busy">Export</button>
                 <label class="btn btn-outline-primary btn-sm mb-0">
                     Import
-                    <InputFile class="d-none" OnChange="HandleImportFileSelected" accept=".xlsx,.csv" />
+                    <InputFile class="d-none" OnChange="HandleImportFileSelected" accept=".xlsx,.csv" disabled="@_busy" />
                 </label>
-                <button class="btn btn-primary btn-sm" @onclick="ShowShareModal">
+                <button class="btn btn-primary btn-sm" @onclick="ShowShareModal" disabled="@_busy">
                     <i class="bi bi-qr-code"></i> Share
                 </button>
             </div>
@@ -274,13 +310,13 @@
                     <td class="text-end text-nowrap">
                         @if (_editingId == individual.Id)
                         {
-                            <button class="btn btn-sm btn-primary" title="Save" @onclick="() => SaveEditAsync(individual.Id)"><i class="bi bi-check-lg"></i></button>
+                            <button class="btn btn-sm btn-primary" title="Save" @onclick="() => SaveEditAsync(individual.Id)" disabled="@_busy"><i class="bi bi-check-lg"></i></button>
                             <button class="btn btn-sm btn-secondary ms-1" title="Cancel" @onclick="CancelEdit"><i class="bi bi-x-lg"></i></button>
                         }
                         else
                         {
-                            <button class="btn btn-sm btn-outline-secondary ms-1" title="Edit" @onclick="() => StartEdit(individual)"><i class="bi bi-pencil"></i></button>
-                            <button class="btn btn-sm btn-outline-danger ms-1" title="Delete" @onclick="() => ConfirmDeleteAsync(individual)"><i class="bi bi-trash"></i></button>
+                            <button class="btn btn-sm btn-outline-secondary ms-1" title="Edit" @onclick="() => StartEdit(individual)" disabled="@_busy"><i class="bi bi-pencil"></i></button>
+                            <button class="btn btn-sm btn-outline-danger ms-1" title="Delete" @onclick="() => ConfirmDeleteAsync(individual)" disabled="@_busy"><i class="bi bi-trash"></i></button>
                         }
                     </td>
                 </tr>
@@ -322,6 +358,8 @@
         </div>
     </div>
     <div class="modal-backdrop fade show"></div>
+}
+
 }
 
 @code {
@@ -366,6 +404,7 @@
     private string _filterStatus = string.Empty;
     private string? _error;
     private bool _busy;
+    private bool _loading = true;
 
     private List<string> _provinces => _individuals
         .Where(i => !string.IsNullOrWhiteSpace(i.Province))
@@ -426,6 +465,7 @@
     protected override async Task OnInitializedAsync()
     {
         await LoadAsync();
+        _loading = false;
         try
         {
             await Listener.EnsureStartedAsync();
@@ -681,9 +721,4 @@
         });
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        Listener.IndividualChanged -= HandleIndividualChanged;
-        await Listener.DisposeAsync();
-    }
 }

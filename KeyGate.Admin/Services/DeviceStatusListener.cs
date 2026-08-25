@@ -5,14 +5,13 @@ using Microsoft.AspNetCore.SignalR.Client;
 
 namespace KeyGate.Admin.Services;
 
-public class DeviceStatusListener : IAsyncDisposable
+public class DeviceStatusListener
 {
     private readonly IConfiguration _configuration;
     private readonly AuthenticationStateProvider _authStateProvider;
 
     private HubConnection? _connection;
     private bool _started;
-    private bool _disposed;
 
     public event Action<DeviceStatusChangedEvent>? DeviceStatusChanged;
     public event Action<IndividualChangedEvent>? IndividualChanged;
@@ -28,7 +27,7 @@ public class DeviceStatusListener : IAsyncDisposable
 
     public async Task EnsureStartedAsync()
     {
-        if (_started || _disposed)
+        if (_started)
         {
             return;
         }
@@ -42,6 +41,7 @@ public class DeviceStatusListener : IAsyncDisposable
             {
                 options.AccessTokenProvider = () => Task.FromResult(jwt);
             })
+            .WithAutomaticReconnect()
             .Build();
 
         _connection.On<DeviceStatusChangedEvent>("DeviceStatusChanged", OnDeviceStatusChanged);
@@ -56,56 +56,26 @@ public class DeviceStatusListener : IAsyncDisposable
 
     private void OnDeviceStatusChanged(DeviceStatusChangedEvent @event)
     {
-        if (_disposed) return;
         try { DeviceStatusChanged?.Invoke(@event); } catch { }
     }
 
     private void OnIndividualChanged(IndividualChangedEvent @event)
     {
-        if (_disposed) return;
         try { IndividualChanged?.Invoke(@event); } catch { }
     }
 
     private void OnSessionChanged(SessionChangedEvent @event)
     {
-        if (_disposed) return;
         try { SessionChanged?.Invoke(@event); } catch { }
     }
 
     private void OnLockScreenConfigChanged(LockScreenConfigChangedEvent @event)
     {
-        if (_disposed) return;
         try { LockScreenConfigChanged?.Invoke(@event); } catch { }
     }
 
     private void OnDeviceChanged(DeviceChangedEvent @event)
     {
-        if (_disposed) return;
         try { DeviceChanged?.Invoke(@event); } catch { }
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (_disposed)
-        {
-            return;
-        }
-
-        _disposed = true;
-        _started = false;
-
-        if (_connection is not null)
-        {
-            try
-            {
-                await _connection.DisposeAsync();
-            }
-            catch
-            {
-                // Connection may already be faulted — safe to ignore.
-            }
-
-            _connection = null;
-        }
     }
 }

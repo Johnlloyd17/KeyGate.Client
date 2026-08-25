@@ -110,6 +110,9 @@ public class KeyGateDbContext : DbContext
             entity.HasKey(s => s.Id);
             entity.Property(s => s.EndReason).HasConversion<int>();
 
+            entity.HasIndex(s => new { s.DeviceId, s.EndedAt });
+            entity.HasIndex(s => s.StartedAt);
+
             entity.HasOne(s => s.Individual)
                 .WithMany(i => i.Sessions)
                 .HasForeignKey(s => s.IndividualId)

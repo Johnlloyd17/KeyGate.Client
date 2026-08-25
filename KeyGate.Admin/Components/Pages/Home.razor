@@ -1,10 +1,12 @@
 ﻿@page "/"
 @attribute [Authorize(Roles = "Admin")]
 @rendermode InteractiveServer
-@implements IAsyncDisposable
 @inject IJSRuntime JS
 
 <PageTitle>Dashboard — KeyGate Admin</PageTitle>
+
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+<script src="/js/charts.js"></script>
 
 <h1>Dashboard</h1>
 
@@ -13,186 +15,205 @@
     <div class="alert alert-danger">@_error</div>
 }
 
-
-<!-- Summary Cards -->
-<div class="row mb-4">
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Individuals</div>
-                <div class="fw-bold" style="font-size:1.75rem;">@_individuals.Count</div>
-                <div class="small text-muted">@_individuals.Count(i => i.Status == "Registered") registered</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Devices</div>
-                <div class="fw-bold" style="font-size:1.75rem;">@_devices.Count</div>
-                <div class="small" style="color:var(--kg-success);">@_devices.Count(d => d.Status == "Unlocked") unlocked</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Sessions (filtered)</div>
-                <div class="fw-bold" style="font-size:1.75rem;">@_sessions.Count</div>
-                <div class="small text-muted">@_sessions.Count(s => s.EndedAt is null) active</div>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-body">
-                <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Avg. Duration</div>
-                <div class="fw-bold" style="font-size:1.75rem;">@FormatDuration(_avgDuration)</div>
-                <div class="small text-muted">of completed sessions</div>
-            </div>
-        </div>
-    </div>
-</div>
-<!-- Filters -->
-<div class="card mb-4">
-    <div class="card-body py-2">
-        <div class="row g-2 align-items-end">
+@if (_loading)
+{
+    <div class="row mb-4">
+        @for (var i = 0; i < 4; i++)
+        {
             <div class="col-md-3">
-                <label class="form-label small">From</label>
-                <input type="date" class="form-control form-control-sm" @bind="_filterFrom" />
+                <div class="card h-100 placeholder-glow">
+                    <div class="card-body">
+                        <div class="placeholder placeholder-sm col-6 mb-2" style="height:0.75rem;"></div>
+                        <div class="placeholder placeholder-lg col-4 mb-2" style="height:1.75rem;"></div>
+                        <div class="placeholder placeholder-sm col-8" style="height:0.75rem;"></div>
+                    </div>
+                </div>
             </div>
-            <div class="col-md-3">
-                <label class="form-label small">To</label>
-                <input type="date" class="form-control form-control-sm" @bind="_filterTo" />
-            </div>
-            <div class="col-md-3">
-                <label class="form-label small">Device</label>
-                <select class="form-select form-select-sm" @bind="_filterDeviceId">
-                    <option value="">All devices</option>
-                    @foreach (var d in _devices)
-                    {
-                        <option value="@d.Id">@d.DeviceName</option>
-                    }
-                </select>
-            </div>
-            <div class="col-md-3 d-flex gap-2">
-                <button class="btn btn-primary btn-sm" @onclick="ApplyFiltersAsync">Apply</button>
-                <button class="btn btn-outline-secondary btn-sm" @onclick="ResetFiltersAsync">Reset</button>
+        }
+    </div>
+}
+else
+{
+    <!-- Summary Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Individuals</div>
+                    <div class="fw-bold" style="font-size:1.75rem;">@_individualsCount</div>
+                </div>
             </div>
         </div>
-    </div>
-</div>
-
-<!-- Charts Row 1 -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header">Sessions per Device</div>
-            <div class="card-body" style="position:relative;min-height:260px;">
-                <canvas id="chart-sessions-per-device"></canvas>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Devices</div>
+                    <div class="fw-bold" style="font-size:1.75rem;">@_devices.Count</div>
+                    <div class="small" style="color:var(--kg-success);">@_devices.Count(d => d.Status == "Unlocked") unlocked</div>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-header">Device Status</div>
-            <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px;">
-                <div style="max-width:220px;width:100%;">
-                    <canvas id="chart-device-status"></canvas>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Sessions (filtered)</div>
+                    <div class="fw-bold" style="font-size:1.75rem;">@_sessions.Count</div>
+                    <div class="small text-muted">@_sessions.Count(s => s.EndedAt is null) active</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-body">
+                    <div class="text-muted" style="font-size:0.75rem;text-transform:uppercase;letter-spacing:0.05em;">Avg. Duration</div>
+                    <div class="fw-bold" style="font-size:1.75rem;">@FormatDuration(_avgDuration)</div>
+                    <div class="small text-muted">of completed sessions</div>
                 </div>
             </div>
         </div>
     </div>
-    <div class="col-md-3">
-        <div class="card h-100">
-            <div class="card-header">Individual Status</div>
-            <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px;">
-                <div style="max-width:220px;width:100%;">
-                    <canvas id="chart-individual-status"></canvas>
+    <!-- Filters -->
+    <div class="card mb-4">
+        <div class="card-body py-2">
+            <div class="row g-2 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small">From</label>
+                    <input type="date" class="form-control form-control-sm" @bind="_filterFrom" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">To</label>
+                    <input type="date" class="form-control form-control-sm" @bind="_filterTo" />
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small">Device</label>
+                    <select class="form-select form-select-sm" @bind="_filterDeviceId">
+                        <option value="">All devices</option>
+                        @foreach (var d in _devices)
+                        {
+                            <option value="@d.Id">@d.DeviceName</option>
+                        }
+                    </select>
+                </div>
+                <div class="col-md-3 d-flex gap-2">
+                    <button class="btn btn-primary btn-sm" @onclick="ApplyFiltersAsync">Apply</button>
+                    <button class="btn btn-outline-secondary btn-sm" @onclick="ResetFiltersAsync">Reset</button>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Charts Row 2 -->
-<div class="row mb-4">
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header">Sessions Over Time (last 14 days)</div>
-            <div class="card-body" style="position:relative;min-height:260px;">
-                <canvas id="chart-sessions-over-time"></canvas>
+    <!-- Charts Row 1 -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">Sessions per Device</div>
+                <div class="card-body" style="position:relative;min-height:260px;">
+                    <canvas id="chart-sessions-per-device"></canvas>
+                </div>
             </div>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="card h-100">
-            <div class="card-header">Session End Reasons</div>
-            <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px;">
-                <div style="max-width:260px;width:100%;">
-                    <canvas id="chart-end-reasons"></canvas>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-header">Device Status</div>
+                <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px;">
+                    <div style="max-width:220px;width:100%;">
+                        <canvas id="chart-device-status"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card h-100">
+                <div class="card-header">Individual Status</div>
+                <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px;">
+                    <div style="max-width:220px;width:100%;">
+                        <canvas id="chart-individual-status"></canvas>
+                    </div>
                 </div>
             </div>
         </div>
     </div>
-</div>
 
-<!-- Device Table -->
-<div class="card">
-    <div class="card-header d-flex justify-content-between align-items-center">
-        <span>Devices</span>
-        <button class="btn btn-sm btn-outline-primary" @onclick="LoadDataAsync">Refresh</button>
+    <!-- Charts Row 2 -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">Sessions Over Time (last 14 days)</div>
+                <div class="card-body" style="position:relative;min-height:260px;">
+                    <canvas id="chart-sessions-over-time"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card h-100">
+                <div class="card-header">Session End Reasons</div>
+                <div class="card-body d-flex align-items-center justify-content-center" style="min-height:260px;">
+                    <div style="max-width:260px;width:100%;">
+                        <canvas id="chart-end-reasons"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
-    <div class="card-body p-0">
-        <div class="table-responsive">
-            <table class="table table-striped table-hover mb-0">
-                <thead>
-                    <tr>
-                        <th>Device</th>
-                        <th>Status</th>
-                        <th>Location</th>
-                        <th>Currently signed in</th>
-                        <th>Last seen</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    @if (_devices.Count == 0)
-                    {
-                        <tr><td colspan="5" class="text-muted">No devices have connected yet.</td></tr>
-                    }
-                    @foreach (var device in _devices)
-                    {
+
+    <!-- Device Table -->
+    <div class="card">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <span>Devices</span>
+            <button class="btn btn-sm btn-outline-primary" @onclick="LoadDataAsync">Refresh</button>
+        </div>
+        <div class="card-body p-0">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover mb-0">
+                    <thead>
                         <tr>
-                            <td>@device.DeviceName</td>
-                            <td>
-                                @if (device.Status == "Unlocked")
-                                {
-                                    <span class="badge text-bg-success status-badge">Unlocked</span>
-                                }
-                                else
-                                {
-                                    <span class="badge text-bg-secondary status-badge">Locked</span>
-                                }
-                            </td>
-                            <td>@(device.Location ?? "—")</td>
-                            <td>@(device.CurrentIndividualName ?? "—")</td>
-                            <td>@device.LastSeenAt.ToLocalTime().ToString("g")</td>
+                            <th>Device</th>
+                            <th>Status</th>
+                            <th>Location</th>
+                            <th>Currently signed in</th>
+                            <th>Last seen</th>
                         </tr>
-                    }
-                </tbody>
-            </table>
+                    </thead>
+                    <tbody>
+                        @if (_devices.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-muted">No devices have connected yet.</td></tr>
+                        }
+                        @foreach (var device in _devices)
+                        {
+                            <tr>
+                                <td>@device.DeviceName</td>
+                                <td>
+                                    @if (device.Status == "Unlocked")
+                                    {
+                                        <span class="badge text-bg-success status-badge">Unlocked</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="badge text-bg-secondary status-badge">Locked</span>
+                                    }
+                                </td>
+                                <td>@(device.Location ?? "—")</td>
+                                <td>@(device.CurrentIndividualName ?? "—")</td>
+                                <td>@device.LastSeenAt.ToLocalTime().ToString("g")</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
-</div>
+}
 
 @code {
     [Inject] private AdminApiClient Api { get; set; } = default!;
     [Inject] private DeviceStatusListener Listener { get; set; } = default!;
 
     private List<DeviceDto> _devices = new();
-    private List<IndividualDto> _individuals = new();
-    private List<SessionDto> _sessions = new();
+    private List<DashboardSession> _sessions = new();
+    private int _individualsCount;
     private string? _error;
+    private bool _loading = true;
 
     private DateTime? _filterFrom;
     private DateTime? _filterTo;
@@ -236,25 +257,46 @@
     {
         try
         {
-            _devices = await Api.GetDevicesAsync();
-            _individuals = await Api.GetIndividualsAsync();
-
             var from = _filterFrom.HasValue ? _filterFrom.Value.Date.ToUniversalTime() : (DateTime?)null;
             var to = _filterTo.HasValue ? _filterTo.Value.Date.AddDays(1).AddTicks(-1).ToUniversalTime() : (DateTime?)null;
-            int? deviceId = int.TryParse(_filterDeviceId, out var id) ? id : null;
 
-            _sessions = await Api.GetSessionsAsync(deviceId: deviceId, from: from, to: to);
+            var summary = await Api.GetDashboardSummaryAsync(from, to);
+
+            _individualsCount = summary.GetProperty("individualsCount").GetInt32();
+
+            _devices = summary.GetProperty("devices").EnumerateArray()
+                .Select(d => new DeviceDto(
+                    d.GetProperty("id").GetInt32(),
+                    d.GetProperty("deviceName").GetString() ?? string.Empty,
+                    string.Empty,
+                    d.TryGetProperty("location", out var loc) && loc.ValueKind != System.Text.Json.JsonValueKind.Null ? loc.GetString() : null,
+                    d.GetProperty("status").GetInt32() == 1 ? "Unlocked" : "Locked",
+                    DateTime.Parse(d.GetProperty("lastSeenAt").GetString()!),
+                    null,
+                    d.TryGetProperty("currentIndividualName", out var cin) && cin.ValueKind != System.Text.Json.JsonValueKind.Null ? cin.GetString() : null))
+                .ToList();
+
+            _sessions = summary.GetProperty("sessions").EnumerateArray()
+                .Select(s => new DashboardSession(
+                    s.GetProperty("deviceName").GetString() ?? string.Empty,
+                    DateTime.Parse(s.GetProperty("startedAt").GetString()!),
+                    s.TryGetProperty("endedAt", out var ea) && ea.ValueKind != System.Text.Json.JsonValueKind.Null ? DateTime.Parse(ea.GetString()!) : (DateTime?)null,
+                    s.TryGetProperty("durationSeconds", out var ds) && ds.ValueKind != System.Text.Json.JsonValueKind.Null ? ds.GetInt32() : (int?)null,
+                    s.TryGetProperty("endReason", out var er) && er.ValueKind != System.Text.Json.JsonValueKind.Null ? er.GetString() : null))
+                .ToList();
 
             var completed = _sessions.Where(s => s.DurationSeconds.HasValue).ToList();
             _avgDuration = completed.Count > 0 ? completed.Average(s => s.DurationSeconds!.Value) : 0;
 
             _error = null;
+            _loading = false;
 
             _shouldRenderCharts = true;
         }
         catch (KeyGateApiException ex)
         {
             _error = ex.Message;
+            _loading = false;
         }
     }
 
@@ -278,7 +320,6 @@
         {
             await RenderSessionsPerDeviceChart();
             await RenderDeviceStatusChart();
-            await RenderIndividualStatusChart();
             await RenderSessionsOverTimeChart();
             await RenderEndReasonsChart();
         }
@@ -351,43 +392,6 @@
                         {
                             data = new[] { locked, unlocked },
                             backgroundColor = new[] { "#6c757d", "#198754" },
-                            borderWidth = 0
-                        }
-                    }
-                },
-                options = new
-                {
-                    responsive = true,
-                    maintainAspectRatio = true,
-                    plugins = new
-                    {
-                        legend = new { position = "bottom", labels = new { padding = 12, font = new { size = 11 } } }
-                    }
-                }
-            });
-        }
-        catch { }
-    }
-
-    private async Task RenderIndividualStatusChart()
-    {
-        try
-        {
-            var registered = _individuals.Count(i => i.Status == "Registered");
-            var pending = _individuals.Count(i => i.Status == "Pending");
-
-            await JS.InvokeVoidAsync("createChart", "chart-individual-status", new
-            {
-                type = "doughnut",
-                data = new
-                {
-                    labels = new[] { "Registered", "Pending" },
-                    datasets = new[]
-                    {
-                        new
-                        {
-                            data = new[] { registered, pending },
-                            backgroundColor = new[] { "#0d6efd", "#ffc107" },
                             borderWidth = 0
                         }
                     }
@@ -518,7 +522,7 @@
 
     private void HandleDeviceStatusChanged(DeviceStatusChangedEvent @event)
     {
-        InvokeAsync(async () =>
+        InvokeAsync(() =>
         {
             var existing = _devices.FirstOrDefault(d => d.Id == @event.DeviceId);
             if (existing is not null)
@@ -575,12 +579,5 @@
         });
     }
 
-    public async ValueTask DisposeAsync()
-    {
-        Listener.DeviceStatusChanged -= HandleDeviceStatusChanged;
-        Listener.IndividualChanged -= HandleIndividualChanged;
-        Listener.SessionChanged -= HandleSessionChanged;
-        Listener.DeviceChanged -= HandleDeviceChanged;
-        await Listener.DisposeAsync();
-    }
+    private record DashboardSession(string DeviceName, DateTime StartedAt, DateTime? EndedAt, int? DurationSeconds, string? EndReason);
 }

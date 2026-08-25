@@ -28,6 +28,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpClient("KeyGateApi", client =>
 {
     client.BaseAddress = new Uri(builder.Configuration["KeyGateApi:BaseUrl"] ?? "http://localhost:5000/");
+    client.Timeout = TimeSpan.FromSeconds(15);
 });
 
 builder.Services.AddScoped<AdminApiClient>();
@@ -42,8 +43,6 @@ if (!app.Environment.IsDevelopment())
     app.UseExceptionHandler("/Error", createScopeForErrors: true);
     app.UseHsts();
 }
-
-app.UseHttpsRedirection();
 
 app.UseAuthentication();
 app.UseAuthorization();

@@ -5,8 +5,8 @@
     height: 2.5rem;
     color: white;
     position: absolute;
-    top: 0.5rem;
-    right: 1rem;
+    top: var(--kg-space-2);
+    right: var(--kg-space-4);
     border: 1px solid rgba(255, 255, 255, 0.1);
     background: url("data:image/svg+xml,%3csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 30 30'%3e%3cpath stroke='rgba%28255, 255, 255, 0.55%29' stroke-linecap='round' stroke-miterlimit='10' stroke-width='2' d='M4 7h22M4 15h22M4 23h22'/%3e%3c/svg%3e") no-repeat center/1.75rem rgba(255, 255, 255, 0.1);
 }
@@ -31,7 +31,7 @@
     position: relative;
     width: 1.25rem;
     height: 1.25rem;
-    margin-right: 0.75rem;
+    margin-right: var(--kg-space-3);
     top: -1px;
     background-size: cover;
     opacity: 0.8;
@@ -65,8 +65,12 @@
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-clock-history' viewBox='0 0 16 16'%3E%3Cpath d='M8.515 1.019A7 7 0 0 0 8 1V0a8 8 0 1 1-.589 15.905l.016-.174A7 7 0 0 0 8.515 1.019ZM7 3.5a.5.5 0 0 0-1 0V8a.5.5 0 0 0 .276.447l2 1a.5.5 0 0 0 .448-.894L7 7.672V3.5Z'/%3E%3C/svg%3E");
 }
 
+.bi-box-arrow-left-nav-menu {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' fill='white' class='bi bi-box-arrow-left' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M6 12.5a.5.5 0 0 0 .5.5h8a.5.5 0 0 0 .5-.5v-9a.5.5 0 0 0-.5-.5h-8a.5.5 0 0 0-.5.5v2a.5.5 0 0 1-1 0v-2A1.5 1.5 0 0 1 6.5 2h8A1.5 1.5 0 0 1 16 3.5v9a1.5 1.5 0 0 1-1.5 1.5h-8A1.5 1.5 0 0 1 5 12.5v-2a.5.5 0 0 1 1 0v2z'/%3E%3Cpath fill-rule='evenodd' d='M14.354 8.354a.5.5 0 0 0 0-.708l-3-3a.5.5 0 0 0-.708.708L12.293 7.5H5.5a.5.5 0 0 0 0 1h6.793l-1.646 1.646a.5.5 0 0 0 .708.708l3-3z'/%3E%3C/svg%3E");
+}
+
 .nav-item {
-    font-size: 0.875rem;
+    font-size: var(--kg-text-base);
     padding-bottom: 2px;
 }
 
@@ -82,7 +86,7 @@
         color: rgba(255, 255, 255, 0.65);
         background: none;
         border: none;
-        border-radius: 6px;
+        border-radius: var(--kg-radius);
         height: 2.75rem;
         display: flex;
         align-items: center;
@@ -104,6 +108,19 @@
 
 .nav-item ::deep .nav-link:hover .bi {
     opacity: 1;
+}
+
+.nav-signout {
+    margin-top: auto;
+    padding: var(--kg-space-3);
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.nav-signout-btn {
+    color: rgba(255, 255, 255, 0.6);
+    background: none;
+    border: none;
+    padding: var(--kg-space-2) 0;
 }
 
 .nav-scrollable {

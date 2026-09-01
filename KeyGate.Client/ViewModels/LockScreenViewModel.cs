@@ -54,11 +54,13 @@ public class LockScreenViewModel : INotifyPropertyChanged
         LockCommand = new Command(async () => await LockAsync());
         NotifyActivityCommand = new Command(() => NotifyActivity());
 
+#if WINDOWS
         if (_windowManager is Platforms.Windows.WindowsWindowManager winManager)
         {
             winManager.OnTrayRestoreRequested += async () => await TrayRestoreAsync();
             winManager.OnTrayLockAndExitRequested += async () => await TrayLockAndExitAsync();
         }
+#endif
     }
 
     public ICommand UnlockCommand { get; }

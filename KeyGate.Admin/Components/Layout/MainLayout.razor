@@ -9,15 +9,14 @@
         <div class="top-row px-4 auth d-flex align-items-center justify-content-end">
             <AuthorizeView>
                 <Authorized>
-                    <a href="/account" class="d-flex align-items-center gap-2 text-decoration-none" style="color:var(--kg-text-secondary);font-size:0.875rem;">
+                    <a href="/account" class="top-row-account d-flex align-items-center gap-2 text-decoration-none">
                         @if (_account?.AvatarUrl is not null)
                         {
-                            <img src="@_account.AvatarUrl" alt="Avatar"
-                                 style="width:32px;height:32px;border-radius:50%;object-fit:cover;border:2px solid var(--kg-border);" />
+                            <img src="@_account.AvatarUrl" alt="Avatar" class="top-row-avatar" />
                         }
                         else
                         {
-                            <div style="width:32px;height:32px;border-radius:50%;background:var(--kg-accent);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-size:0.8rem;font-weight:600;">
+                            <div class="top-row-avatar top-row-avatar-fallback">
                                 @(_initials)
                             </div>
                         }

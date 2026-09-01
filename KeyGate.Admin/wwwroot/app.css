@@ -5,13 +5,26 @@
     --kg-accent-hover: #1d4ed8;
     --kg-accent-light: #dbeafe;
 
-    /* Neutrals */
+    /* Gray scale (Tailwind-aligned, 50–950) */
+    --kg-gray-50: #f8fafc;
+    --kg-gray-100: #f1f5f9;
+    --kg-gray-200: #e2e8f0;
+    --kg-gray-300: #cbd5e1;
+    --kg-gray-400: #94a3b8;
+    --kg-gray-500: #64748b;
+    --kg-gray-600: #475569;
+    --kg-gray-700: #334155;
+    --kg-gray-800: #1e293b;
+    --kg-gray-900: #0f172a;
+    --kg-gray-950: #020617;
+
+    /* Semantic aliases */
     --kg-bg: #ffffff;
-    --kg-surface: #f8fafc;
-    --kg-border: #e2e8f0;
-    --kg-text: #0f172a;
-    --kg-text-secondary: #64748b;
-    --kg-text-muted: #94a3b8;
+    --kg-surface: var(--kg-gray-50);
+    --kg-border: var(--kg-gray-200);
+    --kg-text: var(--kg-gray-900);
+    --kg-text-secondary: var(--kg-gray-500);
+    --kg-text-muted: var(--kg-gray-400);
 
     /* Semantic */
     --kg-success: #16a34a;
@@ -29,6 +42,15 @@
     --kg-space-6: 24px;
     --kg-space-8: 32px;
     --kg-space-12: 48px;
+
+    /* Type scale */
+    --kg-text-xs: 0.75rem;      /* 12px — captions, table headers */
+    --kg-text-sm: 0.8125rem;    /* 13px — secondary text, labels */
+    --kg-text-base: 0.875rem;   /* 14px — body, forms, tables */
+    --kg-text-lg: 1rem;         /* 16px — card titles, section heads */
+    --kg-text-xl: 1.25rem;      /* 20px — page subtitles */
+    --kg-text-2xl: 1.5rem;      /* 24px — page titles (h1) */
+    --kg-text-3xl: 1.75rem;     /* 28px — metric values */
 
     /* Radius */
     --kg-radius: 8px;
@@ -273,19 +295,130 @@ h1 {
 /* ===== Login ===== */
 .login-container {
     min-height: 100vh;
-    background: #0f172a;
+    background: var(--kg-gray-900);
 }
 
 .login-card {
     width: 100%;
     max-width: 380px;
-    border-radius: 12px;
-    border: 1px solid #1e293b;
-    background: #1e293b;
+    border-radius: var(--kg-space-3);
+    border: 1px solid var(--kg-gray-800);
+    background: var(--kg-gray-800);
 }
 
 .login-card .card-body {
     padding: var(--kg-space-8);
+}
+
+.login-brand {
+    display: flex;
+    align-items: center;
+    gap: var(--kg-space-2);
+}
+
+.login-logo {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--kg-radius);
+    background: var(--kg-accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.login-logo-text {
+    color: #fff;
+    font-weight: 700;
+    font-size: var(--kg-text-lg);
+}
+
+.login-brand-name {
+    font-weight: 600;
+    font-size: var(--kg-text-lg);
+    color: var(--kg-gray-50);
+}
+
+.login-title {
+    color: var(--kg-gray-50);
+    font-weight: 600;
+}
+
+.login-subtitle {
+    color: var(--kg-text-secondary);
+    font-size: var(--kg-text-base);
+}
+
+.login-label {
+    color: var(--kg-text-muted);
+}
+
+.login-input {
+    background: var(--kg-gray-900);
+    border-color: var(--kg-gray-700);
+    color: var(--kg-gray-50);
+}
+
+.login-input:focus {
+    border-color: var(--kg-accent);
+    box-shadow: 0 0 0 3px var(--kg-accent-light);
+}
+
+.login-toggle {
+    background: var(--kg-gray-900);
+    border-color: var(--kg-gray-700);
+    color: var(--kg-text-muted);
+}
+
+.login-toggle:hover {
+    color: var(--kg-gray-50);
+}
+
+/* ===== Metric Cards ===== */
+.metric-label {
+    font-size: var(--kg-text-xs);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.metric-value {
+    font-size: 1.75rem;
+    font-weight: 700;
+}
+
+.metric-success {
+    color: var(--kg-success);
+}
+
+/* ===== Chart Containers ===== */
+.chart-body {
+    position: relative;
+    min-height: 260px;
+}
+
+.chart-body-centered {
+    min-height: 260px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.chart-canvas-sm {
+    max-width: 220px;
+    width: 100%;
+}
+
+.chart-canvas-md {
+    max-width: 260px;
+    width: 100%;
+}
+
+/* ===== Skeleton Placeholders ===== */
+.skeleton-label {
+    height: 0.75rem;
+}
+
+.skeleton-value {
+    height: 1.75rem;
 }
 
 /* ===== Lock Screen Preview ===== */

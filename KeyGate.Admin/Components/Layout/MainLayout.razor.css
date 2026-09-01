@@ -10,7 +10,7 @@ main {
 }
 
 .sidebar {
-    background: #0f172a;
+    background: var(--kg-gray-900);
 }
 
 .top-row {
@@ -27,7 +27,7 @@ main {
         white-space: nowrap;
         margin-left: var(--kg-space-4);
         text-decoration: none;
-        font-size: 0.875rem;
+        font-size: var(--kg-text-base);
         color: var(--kg-text-secondary);
     }
 
@@ -40,6 +40,29 @@ main {
         overflow: hidden;
         text-overflow: ellipsis;
     }
+
+.top-row-account {
+    color: var(--kg-text-secondary);
+    font-size: var(--kg-text-base);
+}
+
+.top-row-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--kg-border);
+}
+
+.top-row-avatar-fallback {
+    background: var(--kg-accent);
+    color: #fff;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.8rem;
+    font-weight: 600;
+}
 
 @media (max-width: 640.98px) {
     .top-row {

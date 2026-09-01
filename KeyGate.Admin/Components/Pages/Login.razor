@@ -6,15 +6,15 @@
 <div class="login-container d-flex align-items-center justify-content-center">
     <div class="login-card card shadow">
         <div class="card-body p-4">
-            <div class="d-flex align-items-center mb-4">
-                <div class="me-2" style="width:32px;height:32px;border-radius:8px;background:var(--kg-accent);display:flex;align-items:center;justify-content:center;">
-                    <span style="color:#fff;font-weight:700;font-size:16px;">K</span>
+            <div class="login-brand mb-4">
+                <div class="login-logo">
+                    <span class="login-logo-text">K</span>
                 </div>
-                <span style="font-weight:600;font-size:16px;color:#f8fafc;">KeyGate</span>
+                <span class="login-brand-name">KeyGate</span>
             </div>
 
-            <h1 class="h5 mb-1" style="color:#f8fafc;font-weight:600;">Sign in to Admin</h1>
-            <p class="mb-4" style="color:#64748b;font-size:0.875rem;">Manage your kiosk network</p>
+            <h1 class="h5 mb-1 login-title">Sign in to Admin</h1>
+            <p class="mb-4 login-subtitle">Manage your kiosk network</p>
 
             @if (Error == "invalid")
             {
@@ -28,23 +28,20 @@
             <form method="post" action="/signin">
                 <input type="hidden" name="returnUrl" value="@(string.IsNullOrEmpty(ReturnUrl) ? "/" : ReturnUrl)" />
                 <div class="mb-3">
-                    <label class="form-label" for="email" style="color:#94a3b8;">Email</label>
-                    <input class="form-control" id="email" name="email" type="email" required autofocus
-                           style="background:#0f172a;border-color:#334155;color:#f8fafc;" />
+                    <label class="form-label login-label" for="email">Email</label>
+                    <input class="form-control login-input" id="email" name="email" type="email" required autofocus />
                 </div>
                 <div class="mb-3">
-                    <label class="form-label" for="password" style="color:#94a3b8;">Password</label>
+                    <label class="form-label login-label" for="password">Password</label>
                     <div class="input-group">
-                        <input class="form-control" id="password" name="password" type="password" required
-                               style="background:#0f172a;border-color:#334155;color:#f8fafc;" />
-                        <button class="btn btn-outline-secondary" type="button" id="togglePassword"
-                                style="background:#0f172a;border-color:#334155;color:#94a3b8;"
+                        <input class="form-control login-input" id="password" name="password" type="password" required />
+                        <button class="btn login-toggle" type="button" id="togglePassword"
                                 onclick="var p=document.getElementById('password');var i=document.getElementById('toggleIcon');if(p.type==='password'){p.type='text';i.className='bi bi-eye-slash'}else{p.type='password';i.className='bi bi-eye'}">
                             <i class="bi bi-eye" id="toggleIcon"></i>
                         </button>
                     </div>
                 </div>
-                <button type="submit" class="btn btn-primary w-100" style="margin-top:8px;">Sign in</button>
+                <button type="submit" class="btn btn-primary w-100" style="margin-top:var(--kg-space-2);">Sign in</button>
             </form>
         </div>
     </div>
